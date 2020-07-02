@@ -1,1 +1,1 @@
-# Recurrent Neural System-
+# Recursive Neural System (ReNS)-

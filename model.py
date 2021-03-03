@@ -27,7 +27,7 @@ class recurrentLayer(nn.Module):
         self.cdu_thresh = cdu_thresh
         self.depth = depth
 
-        
+
 
         super().__init__()
 
@@ -38,7 +38,7 @@ class recurrentLayer(nn.Module):
             self.simple_layer = nn.Linear(self.in_size, self.out_size)
         else:
             self.trivial = False
-            self.next = recurrentLayer(in_size=self.next_size, out_size=reflexor_size, next_size=math.floor(self.next_size/2), previous_size=math.floor(self.out_size/2), reflexor_size=math.ceil(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)   
+            self.next = recurrentLayer(in_size=self.next_size, out_size=reflexor_size, next_size=math.floor(self.next_size/2), previous_size=math.floor(self.out_size/2), reflexor_size=math.ceil(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)
             self.previous = recurrentLayer(in_size=self.reflexor_size, next_size=math.floor(self.reflexor_size * 2), previous_size=math.floor(self.previous_size/2), out_size=self.previous_size, reflexor_size=math.floor(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)
             self.in_layer = nn.Linear(self.in_size, self.next_size, True)
             self.out_layer = nn.Linear(self.previous_size, self.out_size, True)
@@ -67,7 +67,7 @@ class RegularAutoEncoder(nn.Module):
         self.out_size = out_size
         self.reflexor_size = reflexor_size
 
-        
+
 
         super().__init__()
 
@@ -83,11 +83,11 @@ class RegularAutoEncoder(nn.Module):
 
 
         out = self.fc1(x.view(-1, self.in_size))
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = self.fc2(out)
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = self.fc3(out)
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = self.fc4(out)
 
         return out
@@ -98,7 +98,7 @@ class Modulator(nn.Module):
 
         self.in_size = in_size
         self.out_size = out_size
-        self.conv_size = conv_size  
+        self.conv_size = conv_size
 
         super().__init__()
 
@@ -127,7 +127,7 @@ class LinModulator(nn.Module):
     def __init__(self, in_size, out_size):
 
         self.in_size = in_size
-        self.out_size = out_size 
+        self.out_size = out_size
 
         super().__init__()
 
@@ -152,7 +152,7 @@ class ModulatedAutoEncoder(nn.Module):
         self.out_size = out_size
         self.reflexor_size = reflexor_size
 
-        
+
 
         super().__init__()
 
@@ -170,12 +170,12 @@ class ModulatedAutoEncoder(nn.Module):
 
         mod = self.mod(x)
         out = self.fc1(x.view(-1, 784))
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = self.fc2(out)
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = out * mod
         out = self.fc3(out)
-        out = torch.sigmoid(out)
+        out = torch.relu(out)
         out = self.fc4(out)
 
         return out
@@ -190,7 +190,7 @@ class PseudoRecLayer(nn.Module):
 
 
 
-        
+
 
         super().__init__()
 
@@ -220,7 +220,7 @@ class PseudoRecAutoEncoder(nn.Module):
         self.reflexor_size = reflexor_size
 
 
-        
+
 
         super().__init__()
 
@@ -261,6 +261,7 @@ class PseudoRecAutoEncoder(nn.Module):
         out = self.relu(out)
 
         out = self.fc1(out)
+        out = self.relu(out)
         out = self.fc2(out)
 
 

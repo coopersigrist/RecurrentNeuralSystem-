@@ -11,8 +11,8 @@ Original file is located at
 
 #@title Insatlling Pyorch
 
-!pip install torch
-!pip install torchvision
+# !pip install torch
+# !pip install torchvision
 
 #@title Import Dependencies
 import numpy as np
@@ -104,7 +104,7 @@ for num, net in enumerate([net1, net2, net3]):
       if (i+1) % 300 == 0:
         temp_loss = loss.item()
         print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
-#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, temp_loss))
+                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, temp_loss))
         dupe = Variable(outputs[0].data, requires_grad=False)
         # plt.imshow(img_fix(images[0]))
         # plt.show()

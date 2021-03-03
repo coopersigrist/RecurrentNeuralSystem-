@@ -114,7 +114,7 @@ class Modulator(nn.Module):
     def forward(self, x):
 
 
-        out = self.conv(x).view(-1, 441)
+        out = self.conv(x).view(-1, self.in_size//2)
         self.relu(out)
         out = self.fc1(out)
         out = torch.sigmoid(out)
@@ -169,7 +169,7 @@ class ModulatedAutoEncoder(nn.Module):
     def forward(self, x):
 
         mod = self.mod(x)
-        out = self.fc1(x.view(-1, 784))
+        out = self.fc1(x.view(-1, self.in_size))
         out = torch.relu(out)
         out = self.fc2(out)
         out = torch.relu(out)
@@ -245,14 +245,14 @@ class PseudoRecAutoEncoder(nn.Module):
     def forward(self, x):
 
         mod1 = self.mod1(x)
-        out = x.view(-1, 784)
+        out = x.view(-1, self.in_size)
 
         # FIRST RECURENCE LAYER
-        first_half = out[:, 392:]
+        first_half = out[:, :self.in_size//2]
         rec1 = self.rec1(first_half)
 
         # SECOND RECURENCE LAYER
-        second_half = out[:, :392]
+        second_half = out[:, self.in_size//2:]
         rec2 = self.rec2(second_half)
 
         out = rec1 * rec2

@@ -59,7 +59,7 @@ class recurrentLayer(nn.Module):
         self.cdu_thresh = cdu_thresh
         self.depth = depth
 
-        
+
 
         super().__init__()
 
@@ -70,7 +70,7 @@ class recurrentLayer(nn.Module):
             self.simple_layer = nn.Linear(self.in_size, self.out_size)
         else:
             self.trivial = False
-            self.next = recurrentLayer(in_size=self.next_size, out_size=reflexor_size, next_size=math.floor(self.next_size/2), previous_size=math.floor(self.out_size/2), reflexor_size=math.ceil(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)   
+            self.next = recurrentLayer(in_size=self.next_size, out_size=reflexor_size, next_size=math.floor(self.next_size/2), previous_size=math.floor(self.out_size/2), reflexor_size=math.ceil(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)
             self.previous = recurrentLayer(in_size=self.reflexor_size, next_size=math.floor(self.reflexor_size * 2), previous_size=math.floor(self.previous_size/2), out_size=self.previous_size, reflexor_size=math.floor(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)
             self.in_layer = nn.Linear(self.in_size, self.next_size, True)
             self.out_layer = nn.Linear(self.previous_size, self.out_size, True)
@@ -99,7 +99,7 @@ class RegularAutoEncoder(nn.Module):
         self.out_size = out_size
         self.reflexor_size = reflexor_size
 
-        
+
 
         super().__init__()
 
@@ -130,7 +130,7 @@ class Modulator(nn.Module):
 
         self.in_size = in_size
         self.out_size = out_size
-        self.conv_size = conv_size  
+        self.conv_size = conv_size
 
         super().__init__()
 
@@ -151,7 +151,7 @@ class Modulator(nn.Module):
         self.relu(out)
         out = self.fc1(out)
         out = torch.sigmoid(out)
-        
+
 
 
         return out
@@ -161,7 +161,7 @@ class LinModulator(nn.Module):
     def __init__(self, in_size, out_size):
 
         self.in_size = in_size
-        self.out_size = out_size 
+        self.out_size = out_size
 
         super().__init__()
 
@@ -186,7 +186,7 @@ class ModulatedAutoEncoder(nn.Module):
         self.out_size = out_size
         self.reflexor_size = reflexor_size
 
-        
+
 
         super().__init__()
 
@@ -224,7 +224,7 @@ class PseudoRecLayer(nn.Module):
 
 
 
-        
+
 
         super().__init__()
 
@@ -254,7 +254,7 @@ class PseudoRecAutoEncoder(nn.Module):
         self.reflexor_size = reflexor_size
 
 
-        
+
 
         super().__init__()
 
@@ -321,7 +321,7 @@ train_gen = torch.utils.data.DataLoader(dataset = train_data,
                                              shuffle = True)
 
 test_gen = torch.utils.data.DataLoader(dataset = test_data,
-                                      batch_size = batch_size, 
+                                      batch_size = batch_size,
                                       shuffle = False)
 
 reflexor_size = 500
@@ -335,7 +335,7 @@ net3 = PseudoRecAutoEncoder(channels * image_size ** 2, channels * image_size **
 
 
 
-lr = .0001 # size of step 
+lr = .0001 # size of step
 loss_function = nn.MSELoss()
 
 # Unnormalize the image to display it
@@ -362,13 +362,13 @@ for num, net in enumerate([net1, net2, net3]):
     for i ,(images,labels) in enumerate(train_gen):
       #images = Variable(images.view(-1,28*28))
       labels = Variable(images.view(-1,3 * image_size ** 2))
-      
+
       optimizer.zero_grad()
       outputs = net(images)
       loss = loss_function(outputs, labels)
       loss.backward()
       optimizer.step()
-      
+
       if (i+1) % 300 == 0:
         temp_loss = loss.item()
         print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
@@ -383,16 +383,16 @@ for num, net in enumerate([net1, net2, net3]):
 
         real_imgs[num].append(img_fix(images[0]))
         reconstructed_imgs[num].append(img_fix(dupe.view(3, image_size, image_size)))
-    
+
         # Test Data
 
         score = 0
         total = 0
         for images,labels in test_gen:
           #images = Variable(images.view(-1,784))
-          
+
           output = net(images)
-          score += loss_function(output, images.view(-1, 3 * image_size ** 2))
+          score += loss_function(output, images.view(-1, 3 * image_size ** 2)).item()
         test_losses[num].append((score))
 
 plt.plot(steps[0], train_losses[0], label= "Baseline")

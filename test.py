@@ -29,7 +29,7 @@ train_gen = torch.utils.data.DataLoader(dataset = train_data,
                                              shuffle = True)
 
 test_gen = torch.utils.data.DataLoader(dataset = test_data,
-                                      batch_size = batch_size, 
+                                      batch_size = batch_size,
                                       shuffle = False)
 
 # net = recurrentLayer(784, 784, 10, 5, 10, 0)
@@ -39,7 +39,7 @@ net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)
 
 
 
-lr = .0001 # size of step 
+lr = .0001 # size of step
 loss_function = nn.MSELoss()
 
 train_losses = [[],[],[]]
@@ -61,13 +61,13 @@ for num, net in enumerate([net1, net2, net3]):
     for i ,(images,labels) in enumerate(train_gen):
       #images = Variable(images.view(-1,28*28))
       labels = Variable(images.view(-1,28*28))
-      
+
       optimizer.zero_grad()
       outputs = net(images)
       loss = loss_function(outputs, labels)
       loss.backward()
       optimizer.step()
-      
+
       if (i+1) % 300 == 0:
         temp_loss = loss.item()
         print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
@@ -82,16 +82,16 @@ for num, net in enumerate([net1, net2, net3]):
 
         real_imgs[num].append(images[0].view(28, 28))
         reconstructed_imgs[num].append(dupe.view(28, 28))
-    
+
         # Test Data
 
         score = 0
         total = 0
         for images,labels in test_gen:
           #images = Variable(images.view(-1,784))
-          
+
           output = net(images)
-          score += loss_function(output, images.view(-1, 784))
+          score += loss_function(output, images.view(-1, 784)).item()
         test_losses[num].append((score))
 
 then plt.plot(steps[0], train_losses[0], label= "Baseline")

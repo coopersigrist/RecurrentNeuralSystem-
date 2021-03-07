@@ -207,13 +207,19 @@ class ConvolutionalEncoderClassifier(nn.Module):
 
       super().__init__()
 
-      self.fc = nn.Linear(reflexor_size * 16 ** 2, n_classes)
+      self.fc1 = nn.Linear(reflexor_size * 16 ** 2, 500)
+      self.fc2 = nn.Linear(500, n_classes)
       self.sigmoid = torch.sigmoid
+      self.batchnorm = nn.BatchNorm1d(500)
+      self.relu = torch.relu
 
     def forward(self, x):
 
       out = x.view(-1, reflexor_size * 16 ** 2)
-      out = self.fc(out)
+      out = self.fc1(out)
+      out = self.batchnorm(out)
+      out = self.relu(out)
+      out = self.fc2(out)
       out = self.sigmoid(out)
 
       return out
@@ -255,11 +261,10 @@ decoder2 = ConvolutionalDecoder(reflexor_size)
 classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
 
-net1 = [encoder1, decoder1, classifier1, params1]
-net2 = [encoder2, decoder2, classifier2, params2]
+net1 = [encoder1, decoder1, classifier1, auto_params1]
+net2 = [encoder2, decoder2, classifier2, auto_params2]
 
 lr = 1e-5 # size of step 
-loss_function = nn.MSELoss()
 loss_function = nn.MSELoss()
 
 # Unnormalize the image to display it
@@ -267,8 +272,10 @@ def img_fix(img):
   return np.transpose((img).numpy(), (1, 2, 0))
 
 # Commented out IPython magic to ensure Python compatibility.
-train_losses = [[],[],[]]
-test_losses = [[],[],[]]
+auto_train_losses = [[],[],[]]
+auto_test_losses = [[],[],[]]
+class_train_losses = [[],[],[]]
+class_test_losses = [[],[],[]]
 
 real_imgs = [[],[],[]]
 reconstructed_imgs = [[],[],[]]
@@ -278,78 +285,107 @@ param_counts = np.ones(3)
 steps = [[],[],[]]
 
 for num, net in enumerate([net1, net2]):
-  encoder, decoder, classifier, auto_params = net
+  encoder, decoder, classifier, params = net
 
   autoencoder_optimizer = torch.optim.Adam(params, lr=lr)
   classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
   param_counts[num] = (sum(p.numel() for p in params if p.requires_grad))
 
   for epoch in range(num_epochs):
-    for i, (images,labels) in enumerate(train_gen):
+    for i, (images, labels) in enumerate(train_gen):
       
       autoencoder_optimizer.zero_grad()
       classifier_optimizer.zero_grad()
       
+      # Generate encoded features
       encoded = encoder(images)
 
-      outputs = classifier(encoded)
-      labels = torch.nn.functional.one_hot(labels).type(torch.FloatTensor)
-      output_loss = loss_function(outputs, Variable(labels))
-      output_loss.backward(retain_graph=True)
-
+      # Train autoencoder
       decoded = decoder(encoded)
-      decoder_loss = loss_function(decoded, Variable(images))
-      decoder_loss.backward(retain_graph=True)
-
+      decoder_loss = loss_function(decoded, images)
+      decoder_loss.backward()
       autoencoder_optimizer.step()
+
+      # Train classifier
+      outputs = classifier(encoded.detach())
+      labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+      output_loss = loss_function(outputs, labels)
+      output_loss.backward()
       classifier_optimizer.step()
       
       if (i+1) % 300 == 0:
-        o_loss = output_loss.item()
-        d_loss = decoder_loss.item()
-        print('Epoch [%d/%d], Step [%d/%d], o_loss: %.4f, d_loss: %.4f,'
-#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, o_loss, d_loss))
+        auto_loss = decoder_loss.item()
+        class_loss = output_loss.item()
+        print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,'
+#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, class_loss, auto_loss))
         dupe = Variable(decoded[0].data, requires_grad=False)
         # plt.imshow(img_fix(images[0]))
         # plt.show()
         # plt.imshow(img_fix(dupe))
         # plt.show()
-        train_losses[num].append(temp_loss)
+        auto_train_losses[num].append(auto_loss)
+        class_train_losses[num].append(class_loss)
         steps[num].append((50000 * epoch) + ((i + 1) * batch_size))
 
         real_imgs[num].append(img_fix(images[0].clone()))
         reconstructed_imgs[num].append(img_fix(dupe.clone()))
 
         # Test Data
-
+        # Calculate train loss for image generation
         score = 0
         total = 0
-        for images,labels in test_gen:
+        for images, labels in test_gen:
           output = decoder(encoder(images))
           score += loss_function(output, images).item()
-        test_losses[num].append((score))
+        auto_test_losses[num].append((score))
 
-plt.plot(steps[0], train_losses[0], label= "Baseline")
-plt.plot(steps[1], train_losses[1], label= "Modulated")
-plt.plot(steps[2], train_losses[2], label= "Recurrent with Modulation")
+        # Calculate train loss for image classification
+        score = 0
+        total = 0
+        for images, labels in test_gen:
+          output = classifier(encoder(images))
+          labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+          score += loss_function(output, labels).item()
+        class_test_losses[num].append((score))
+
+plt.plot(steps[0], auto_train_losses[0], label= "Baseline")
+plt.plot(steps[1], auto_train_losses[1], label= "Modulated")
+plt.plot(steps[2], auto_train_losses[2], label= "Recurrent with Modulation")
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('Training loss history')
+plt.title('Autoencoder training loss history')
 plt.legend()
 plt.show()
 
-plt.plot(steps[0], test_losses[0], label= "Baseline")
-plt.plot(steps[1], test_losses[1], label= "Modulated")
-plt.plot(steps[2], test_losses[2], label= "Recurrent with Modulation")
+plt.plot(steps[0], class_train_losses[0], label= "Baseline")
+plt.plot(steps[1], class_train_losses[1], label= "Modulated")
+plt.plot(steps[2], class_train_losses[2], label= "Recurrent with Modulation")
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('Testing loss history')
+plt.title('Classification training loss history')
+plt.legend()
+plt.show()
+
+plt.plot(steps[0], auto_test_losses[0], label= "Baseline")
+plt.plot(steps[1], auto_test_losses[1], label= "Modulated")
+plt.plot(steps[2], auto_test_losses[2], label= "Recurrent with Modulation")
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
+plt.title('Autoencoder training loss history')
+plt.legend()
+plt.show()
+
+plt.plot(steps[0], class_test_losses[0], label= "Baseline")
+plt.plot(steps[1], class_test_losses[1], label= "Modulated")
+plt.plot(steps[2], class_test_losses[2], label= "Recurrent with Modulation")
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
+plt.title('Classification test loss history')
 plt.legend()
 plt.show()
 
 for num,count in enumerate(param_counts):
   param_counts[num] /= 1000
-
 
 plt.bar(["Base", "Modulated", "ReNS"], param_counts)
 plt.xlabel('Model')

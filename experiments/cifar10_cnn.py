@@ -45,155 +45,27 @@ plt.rcParams['image.cmap'] = 'gray'
 
 """
 
-class recurrentLayer(nn.Module):
+class Modulator(nn.Module):
 
-    def __init__(self, in_size, out_size, next_size, previous_size, reflexor_size, cdu_thresh, depth=1):
-
-        print("new layer")
-
-        self.in_size = in_size
-        self.out_size = out_size
-        self.next_size = next_size
-        self.previous_size = previous_size
-        self.reflexor_size = reflexor_size
-        self.cdu_thresh = cdu_thresh
-        self.depth = depth
-
-        
+    def __init__(self, reflexor_size):
 
         super().__init__()
 
         self.soft = torch.nn.Softmax(dim=1)
-
-        if(self.in_size <= self.reflexor_size or depth > 3):
-            self.trivial = True
-            self.simple_layer = nn.Linear(self.in_size, self.out_size)
-        else:
-            self.trivial = False
-            self.next = recurrentLayer(in_size=self.next_size, out_size=reflexor_size, next_size=math.floor(self.next_size/2), previous_size=math.floor(self.out_size/2), reflexor_size=math.ceil(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)   
-            self.previous = recurrentLayer(in_size=self.reflexor_size, next_size=math.floor(self.reflexor_size * 2), previous_size=math.floor(self.previous_size/2), out_size=self.previous_size, reflexor_size=math.floor(self.reflexor_size * 2), cdu_thresh=self.cdu_thresh, depth=self.depth+1)
-            self.in_layer = nn.Linear(self.in_size, self.next_size, True)
-            self.out_layer = nn.Linear(self.previous_size, self.out_size, True)
-
-
-    def forward(self, x):
-        if(self.trivial):
-            return self.simple_layer(x)
-
-        out = self.in_layer(x)
-        out = torch.sigmoid(out)
-        out = self.next.forward(out)
-        out = torch.sigmoid(out)
-        out = self.previous.forward(out)
-        out = torch.sigmoid(out)
-        out = self.out_layer(out)
-        out = self.soft(out)
-
-        return out
-
-class ConvolutionalAutoEncoder(nn.Module):
-
-    def __init__(self, reflexor_size):
-
-        #self.in_size = in_size
-        #self.out_size = out_size
         self.reflexor_size = reflexor_size
 
-        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=(10,10), padding=5)
+        self.conv2 = nn.Conv2d(in_channels=3, out_channels=reflexor_size, kernel_size=3, stride=2)
 
-        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(32, 32, 3, padding=1)
-        self.conv4 = nn.Conv2d(32, 32, 3, padding=1)
-        self.conv5 = nn.Conv2d(32, 3, 1)
-        self.conv6 = nn.Conv2d(8, 3, 1)
-        self.upsample = nn.Upsample(scale_factor=2)
-        self.relu = torch.relu
-        self.sigmoid = torch.sigmoid
-        self.batchnorm = nn.BatchNorm2d(32)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
 
 
         out = self.conv1(x)
         out = self.relu(out)
-        out = self.batchnorm(out)
         out = self.conv2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-        out = self.batchnorm(out)
-
-        out = self.upsample(out)
-        out = self.conv4(out)
-        out = self.relu(out)
-        out = self.batchnorm(out)
-        out = self.conv5(out)
-        out = self.sigmoid(out)
-
-        return out
-
-class RegularAutoEncoder(nn.Module):
-
-    def __init__(self, in_size, out_size, reflexor_size):
-
-        self.in_size = in_size
-        self.out_size = out_size
-        self.reflexor_size = reflexor_size
-
-        
-
-        super().__init__()
-
-        self.soft = torch.nn.Softmax(dim=1)
-
-        self.fc1 = nn.Linear(in_size, 300)
-        self.fc2 = nn.Linear(300, reflexor_size)
-        self.fc3 = nn.Linear(reflexor_size, 300)
-        self.fc4 = nn.Linear(300, out_size)
-
-
-    def forward(self, x):
-
-
-        out = self.fc1(x.view(-1, self.in_size))
-        out = torch.relu(out)
-        out = self.fc2(out)
-        out = torch.relu(out)
-        out = self.fc3(out)
-        out = torch.relu(out)
-        out = self.fc4(out)
-
-        return out
-
-class Modulator(nn.Module):
-
-    def __init__(self, in_size, conv_size, out_size):
-
-        self.in_size = in_size
-        self.out_size = out_size
-        self.conv_size = conv_size  
-
-        super().__init__()
-
-        self.soft = torch.nn.Softmax(dim=1)
-
-        self.conv = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=(10,10), padding=(1,1))
-        self.fc1 = nn.Linear(3 * 25*25, out_size)
-
-        self.relu = nn.ReLU()
-
-
-
-    def forward(self, x):
-
-
-        out = self.conv(x)
-        out = out.view(-1, 3*25*25)
-        self.relu(out)
-        out = self.fc1(out)
         out = torch.sigmoid(out)
-        
-
 
         return out
 
@@ -210,141 +82,150 @@ class LinModulator(nn.Module):
 
         self.fc1 = nn.Linear(in_size, out_size)
 
-
     def forward(self, x):
 
         out = self.fc1(x.view(-1, self.in_size))
         out = torch.sigmoid(out)
 
-
         return out
 
-class ModulatedAutoEncoder(nn.Module):
+class ConvolutionalEncoder(nn.Module):
 
-    def __init__(self, in_size, out_size, reflexor_size):
+    def __init__(self, reflexor_size):
 
-        self.in_size = in_size
-        self.out_size = out_size
         self.reflexor_size = reflexor_size
-
-        
 
         super().__init__()
 
-        self.soft = torch.nn.Softmax(dim=1)
+        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(32, reflexor_size, 3, padding=1)
+        self.relu = torch.relu
+        self.sigmoid = torch.sigmoid
+        self.batchnorm = nn.BatchNorm2d(32)
+        self.batchnormr = nn.BatchNorm2d(reflexor_size)
 
+    def forward(self, x):
 
-        self.mod = Modulator(in_size, (4,4), reflexor_size)
-        self.fc1 = nn.Linear(in_size, 200)
-        self.fc2 = nn.Linear(200, reflexor_size)
-        self.fc3 = nn.Linear(reflexor_size, 200)
-        self.fc4 = nn.Linear(200, out_size)
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.batchnorm(out)
+        out = self.conv2(out)
+        out = self.relu(out)
+        out = self.conv3(out)
+        out = self.batchnormr(out)
 
+        return out
+
+class ModulatedConvolutionalEncoder(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.mod = Modulator(reflexor_size)
+        self.encoder = ConvolutionalEncoder(reflexor_size)
 
     def forward(self, x):
 
         mod = self.mod(x)
-        out = self.fc1(x.view(-1, 3 * 32 * 32))
-        out = torch.relu(out)
-        out = self.fc2(out)
-        out = torch.relu(out)
+        out = self.encoder(x)
         out = out * mod
-        out = self.fc3(out)
-        out = torch.relu(out)
-        out = self.fc4(out)
 
         return out
 
-class PseudoRecLayer(nn.Module):
+class ConvolutionalDecoder(nn.Module):
 
-    def __init__(self, in_size, out_size, reflexor_size, modulator):
+    def __init__(self, reflexor_size):
 
-        self.in_size = in_size
-        self.out_size = out_size
         self.reflexor_size = reflexor_size
-
-
-
-        
 
         super().__init__()
 
-        self.fc1 = nn.Linear(in_size, reflexor_size)
-        self.fc2 = nn.Linear(reflexor_size, out_size)
-        self.mod = modulator
-        self.relu = nn.ReLU()
+        self.conv1 = nn.Conv2d(reflexor_size, 32, 3, padding=1)
+        self.conv2 = nn.Conv2d(32, 3, 1)
+        self.upsample = nn.Upsample(scale_factor=2)
+        self.relu = torch.relu
+        self.sigmoid = torch.sigmoid
+        self.batchnorm = nn.BatchNorm2d(32)
 
+    def forward(self, x):
 
+        out = self.upsample(x)
+        out = self.conv1(out)
+        out = self.relu(out)
+        out = self.batchnorm(out)
+        out = self.conv2(out)
+        out = self.sigmoid(out)
+
+        return out
+
+class ConvolutionalAutoEncoder(nn.Module):
+
+    def __init__(self, reflexor_size, encoder=None, decoder=None):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.encoder = ConvolutionalEncoder(reflexor_size)
+        self.decoder = ConvolutionalDecoder(reflexor_size)
+
+    def forward(self, x):
+
+        out = self.encoder(x)
+        out = self.decoder(out)
+
+        return out
+
+class ModulatedConvolutionalAutoEncoder(nn.Module):
+
+    def __init__(self, reflexor_size, encoder=None, decoder=None):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.mod = Modulator(reflexor_size)
+        self.encoder = ModulatedConvolutionalEncoder(reflexor_size)
+        self.decoder = ConvolutionalDecoder(reflexor_size)
 
     def forward(self, x):
 
         mod = self.mod(x)
-        out = self.fc1(x.view(-1, self.in_size))
-        out = self.relu(out)
-        out = out * mod
-        out = self.fc2(out)
+        out = self.encoder(out)
+        out = self.decoder(out)
 
         return out
 
-class PseudoRecAutoEncoder(nn.Module):
+class ConvolutionalEncoderClassifier(nn.Module):
+    def __init__(self, reflexor_size, n_classes):
 
-    def __init__(self, in_size, out_size, reflexor_size):
+      self.reflexor_size = reflexor_size
 
-        self.in_size = in_size
-        self.out_size = out_size
-        self.reflexor_size = reflexor_size
+      super().__init__()
 
-
-        
-
-        super().__init__()
-
-
-        self.mod1 = LinModulator(in_size, reflexor_size)
-        self.mod2 = LinModulator(in_size//2, reflexor_size//2)
-        self.mod3 = LinModulator(in_size//2, reflexor_size//2)
-
-        print("made modulators")
-
-        self.rec1 = PseudoRecLayer(in_size//2, reflexor_size, reflexor_size//2, self.mod2)
-        self.rec2 = PseudoRecLayer(in_size//2, reflexor_size, reflexor_size//2, self.mod3)
-
-        print("made recurrers")
-
-        self.fc1 = nn.Linear(reflexor_size, 300)
-        self.fc2 = nn.Linear(300, out_size)
-
-        self.relu = nn.ReLU()
-
+      self.fc = nn.Linear(reflexor_size * 16 ** 2, n_classes)
+      self.sigmoid = torch.sigmoid
 
     def forward(self, x):
 
-        mod1 = self.mod1(x)
-        out = x.view(-1, 3 * 32 * 32)
+      out = x.view(-1, reflexor_size * 16 ** 2)
+      out = self.fc(out)
+      out = self.sigmoid(out)
 
-        # FIRST RECURENCE LAYER
-        first_half = out[:, 1536:]
-        rec1 = self.rec1(first_half)
-
-        # SECOND RECURENCE LAYER
-        second_half = out[:, :1536]
-        rec2 = self.rec2(second_half)
-
-        out = rec1 * rec2
-        out = self.relu(out)
-        out = out * mod1
-        out = self.relu(out)
-
-        out = self.fc1(out)
-        out = self.fc2(out)
-
-
-        return out
+      return out
 
 """# TRAINING"""
 
-batch_size = 32
-num_epochs = 3
+# Hyperparams
+batch_size = 64
+num_epochs = 10
+reflexor_size = 10
+image_size = 32
+channels = 3
 
 transform = transforms.Compose(
     [transforms.ToTensor()])
@@ -364,18 +245,21 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
                                       batch_size = batch_size, 
                                       shuffle = False)
 
-reflexor_size = 100
-image_size = 32
-channels = 3
+encoder1 = ConvolutionalEncoder(reflexor_size)
+decoder1 = ConvolutionalDecoder(reflexor_size)
+classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
 
-# net = recurrentLayer(784, 784, 10, 5, 10, 0)
-#net1 = RegularAutoEncoder(channels * image_size ** 2, channels * image_size ** 2, reflexor_size)
-#net2 = ModulatedAutoEncoder(channels * image_size ** 2, channels * image_size ** 2, reflexor_size)
-#net3 = PseudoRecAutoEncoder(channels * image_size ** 2, channels * image_size ** 2, reflexor_size)
-net = ConvolutionalAutoEncoder(reflexor_size)
+encoder2 = ModulatedConvolutionalEncoder(reflexor_size)
+decoder2 = ConvolutionalDecoder(reflexor_size)
+classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
 
+net1 = [encoder1, decoder1, classifier1, params1]
+net2 = [encoder2, decoder2, classifier2, params2]
 
-lr = .0001 # size of step 
+lr = 1e-5 # size of step 
+loss_function = nn.MSELoss()
 loss_function = nn.MSELoss()
 
 # Unnormalize the image to display it
@@ -393,28 +277,39 @@ param_counts = np.ones(3)
 
 steps = [[],[],[]]
 
-for num, net in enumerate([net]):
+for num, net in enumerate([net1, net2]):
+  encoder, decoder, classifier, auto_params = net
 
-  optimizer = torch.optim.Adam( net.parameters(), lr=lr)
-  param_counts[num] = (sum(p.numel() for p in net.parameters() if p.requires_grad))
+  autoencoder_optimizer = torch.optim.Adam(params, lr=lr)
+  classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
+  param_counts[num] = (sum(p.numel() for p in params if p.requires_grad))
 
   for epoch in range(num_epochs):
-    for i ,(images,labels) in enumerate(train_gen):
-      #images = Variable(images.view(-1,28*28))
-      #labels = Variable(images.view(-1, channels * image_size ** 2))
-      labels = Variable(images)
+    for i, (images,labels) in enumerate(train_gen):
       
-      optimizer.zero_grad()
-      outputs = net(images)
-      loss = loss_function(outputs, labels)
-      loss.backward()
-      optimizer.step()
+      autoencoder_optimizer.zero_grad()
+      classifier_optimizer.zero_grad()
+      
+      encoded = encoder(images)
+
+      outputs = classifier(encoded)
+      labels = torch.nn.functional.one_hot(labels).type(torch.FloatTensor)
+      output_loss = loss_function(outputs, Variable(labels))
+      output_loss.backward(retain_graph=True)
+
+      decoded = decoder(encoded)
+      decoder_loss = loss_function(decoded, Variable(images))
+      decoder_loss.backward(retain_graph=True)
+
+      autoencoder_optimizer.step()
+      classifier_optimizer.step()
       
       if (i+1) % 300 == 0:
-        temp_loss = loss.item()
-        print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
-#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, temp_loss))
-        dupe = Variable(outputs[0].data, requires_grad=False)
+        o_loss = output_loss.item()
+        d_loss = decoder_loss.item()
+        print('Epoch [%d/%d], Step [%d/%d], o_loss: %.4f, d_loss: %.4f,'
+#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, o_loss, d_loss))
+        dupe = Variable(decoded[0].data, requires_grad=False)
         # plt.imshow(img_fix(images[0]))
         # plt.show()
         # plt.imshow(img_fix(dupe))
@@ -423,7 +318,6 @@ for num, net in enumerate([net]):
         steps[num].append((50000 * epoch) + ((i + 1) * batch_size))
 
         real_imgs[num].append(img_fix(images[0].clone()))
-        #reconstructed_imgs[num].append(img_fix(dupe.clone().view(3, image_size, image_size)))
         reconstructed_imgs[num].append(img_fix(dupe.clone()))
 
         # Test Data
@@ -431,9 +325,7 @@ for num, net in enumerate([net]):
         score = 0
         total = 0
         for images,labels in test_gen:
-          #images = Variable(images.view(-1,784))
-          
-          output = net(images)
+          output = decoder(encoder(images))
           score += loss_function(output, images).item()
         test_losses[num].append((score))
 
@@ -469,7 +361,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 num_smaples = len(real_imgs[0])
 
 
-for num in [0]:
+for num in [0, 1]:
   fig = plt.figure(figsize=(20.,20.))
   grid = ImageGrid(fig, 111,  # similar to subplot(111)
                   nrows_ncols=(2, num_smaples),  # creates 2x2 grid of axes

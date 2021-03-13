@@ -94,7 +94,7 @@ for num, net in enumerate([net1, net2, net3]):
           score += loss_function(output, images.view(-1, 784)).item()
         test_losses[num].append((score))
 
-then plt.plot(steps[0], train_losses[0], label= "Baseline")
+plt.plot(steps[0], train_losses[0], label= "Baseline")
 plt.plot(steps[1], train_losses[1], label= "Modulated")
 plt.plot(steps[2], train_losses[2], label= "Recurrent with Modulation")
 plt.xlabel('Iteration')

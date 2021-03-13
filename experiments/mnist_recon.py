@@ -33,6 +33,7 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
                                       shuffle = False)
 
 # net = recurrentLayer(784, 784, 10, 5, 10, 0)
+reflexor_size = 10
 net1 = RegularAutoEncoder(784, 784, reflexor_size)
 net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
 net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)
@@ -94,7 +95,7 @@ for num, net in enumerate([net1, net2, net3]):
           score += loss_function(output, images.view(-1, 784)).item()
         test_losses[num].append((score))
 
-then plt.plot(steps[0], train_losses[0], label= "Baseline")
+plt.plot(steps[0], train_losses[0], label= "Baseline")
 plt.plot(steps[1], train_losses[1], label= "Modulated")
 plt.plot(steps[2], train_losses[2], label= "Recurrent with Modulation")
 plt.xlabel('Iteration')

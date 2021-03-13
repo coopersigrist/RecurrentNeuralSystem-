@@ -292,11 +292,11 @@ class Modulator(nn.Module):
     def forward(self, x):
 
 
-        out = self.conv(x).view(-1, self.in_size//2)
+        out = self.conv(x)
         self.relu(out)
+        out = out.view(-1, 21 * 21)
         out = self.fc1(out)
         out = torch.sigmoid(out)
-
 
         return out
 

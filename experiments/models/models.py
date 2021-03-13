@@ -37,26 +37,6 @@ class ConvModulator(nn.Module):
 
         return out
 
-class LinModulator(nn.Module):
-
-    def __init__(self, in_size, out_size):
-
-        self.in_size = in_size
-        self.out_size = out_size
-
-        super().__init__()
-
-        self.soft = torch.nn.Softmax(dim=1)
-
-        self.fc1 = nn.Linear(in_size, out_size)
-
-    def forward(self, x):
-
-        out = self.fc1(x.view(-1, self.in_size))
-        out = torch.sigmoid(out)
-
-        return out
-
 class ConvolutionalEncoder(nn.Module):
 
     def __init__(self, reflexor_size):

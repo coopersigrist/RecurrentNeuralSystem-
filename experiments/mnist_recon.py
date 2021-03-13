@@ -33,7 +33,7 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
                                       shuffle = False)
 
 # net = recurrentLayer(784, 784, 10, 5, 10, 0)
-reflexor_size = 10
+reflexor_size = 100
 net1 = RegularAutoEncoder(784, 784, reflexor_size)
 net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
 net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)

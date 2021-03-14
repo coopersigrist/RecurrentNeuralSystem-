@@ -11,8 +11,8 @@ Original file is located at
 
 #@title Insatlling Pyorch
 
-!pip install torch
-!pip install torchvision
+# !pip install torch
+# !pip install torchvision
 
 #@title Import Dependencies
 import numpy as np

@@ -14,6 +14,9 @@ from sklearn.metrics import jaccard_score
 import matplotlib.pyplot as plt
 from models.models import RegularAutoEncoder, ModulatedAutoEncoder, PseudoRecAutoEncoder
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Using device:", device)
+
 batch_size = 32
 num_epochs = 2
 
@@ -34,9 +37,15 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
 
 # net = recurrentLayer(784, 784, 10, 5, 10, 0)
 reflexor_size = 10
-net1 = RegularAutoEncoder(784, 784, reflexor_size)
-net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
-net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)
+
+if torch.cuda.is_available():
+  net1 = RegularAutoEncoder(784, 784, reflexor_size).cuda()
+  net2 = ModulatedAutoEncoder(784, 784, reflexor_size).cuda()
+  net3 = PseudoRecAutoEncoder(784, 784, reflexor_size).cuda()
+else:
+  net1 = RegularAutoEncoder(784, 784, reflexor_size)
+  net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
+  net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)
 
 
 
@@ -63,6 +72,10 @@ for num, net in enumerate([net1, net2, net3]):
       #images = Variable(images.view(-1,28*28))
       labels = Variable(images.view(-1,28*28))
 
+      if torch.cuda.is_available():
+        images = images.cuda()
+        labels = labels.cuda()
+
       optimizer.zero_grad()
       outputs = net(images)
       loss = loss_function(outputs, labels)
@@ -74,6 +87,8 @@ for num, net in enumerate([net1, net2, net3]):
         print('Epoch [%d/%d], Step [%d/%d], Loss: %.4f'
                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, temp_loss))
         dupe = Variable(outputs[0].data, requires_grad=False)
+        if torch.cuda.is_available():
+          dupe = dupe.cpu()
         # plt.imshow(images[0].view(28, 28))
         # plt.show()
         # plt.imshow(dupe.view(28, 28))
@@ -81,6 +96,8 @@ for num, net in enumerate([net1, net2, net3]):
         train_losses[num].append(temp_loss)
         steps[num].append((50000 * epoch) + ((i + 1) * batch_size))
 
+        if torch.cuda.is_available():
+          images = images.cpu()
         real_imgs[num].append(images[0].view(28, 28))
         reconstructed_imgs[num].append(dupe.view(28, 28))
 
@@ -90,6 +107,10 @@ for num, net in enumerate([net1, net2, net3]):
         total = 0
         for images,labels in test_gen:
           #images = Variable(images.view(-1,784))
+
+          if torch.cuda.is_available():
+            images = images.cuda()
+            labels = labels.cuda()
 
           output = net(images)
           score += loss_function(output, images.view(-1, 784)).item()

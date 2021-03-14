@@ -30,7 +30,7 @@ test_gen = torch.utils.data.DataLoader(dataset=test_data,
                                        batch_size=batch_size,
                                        shuffle=False)
 
-reflexor_size = 10
+reflexor_size = 100
 
 if torch.cuda.is_available():
     net1 = RegularAutoEncoder(784, 784, reflexor_size).cuda()

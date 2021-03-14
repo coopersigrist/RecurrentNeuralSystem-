@@ -30,6 +30,10 @@ from torch.nn.modules.utils import _pair
 from torchvision import models
 from sklearn.metrics import jaccard_score
 import matplotlib.pyplot as plt
+import time
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Using device:", device)
 
 # Commented out IPython magic to ensure Python compatibility.
 # %matplotlib inline
@@ -69,14 +73,22 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
                                       batch_size = batch_size,
                                       shuffle = False)
 
-encoder1 = ConvolutionalEncoder(reflexor_size)
-decoder1 = ConvolutionalDecoder(reflexor_size)
-classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10)
-auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
+if torch.cuda.is_available():
+  encoder1 = ConvolutionalEncoder(reflexor_size).cuda()
+  decoder1 = ConvolutionalDecoder(reflexor_size).cuda()
+  classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10).cuda()
+  encoder2 = ModulatedConvolutionalEncoder(reflexor_size).cuda()
+  decoder2 = ConvolutionalDecoder(reflexor_size).cuda()
+  classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10).cuda()
+else:
+  encoder1 = ConvolutionalEncoder(reflexor_size)
+  decoder1 = ConvolutionalDecoder(reflexor_size)
+  classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+  encoder2 = ModulatedConvolutionalEncoder(reflexor_size)
+  decoder2 = ConvolutionalDecoder(reflexor_size)
+  classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
 
-encoder2 = ModulatedConvolutionalEncoder(reflexor_size)
-decoder2 = ConvolutionalDecoder(reflexor_size)
-classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
 
 net1 = [encoder1, decoder1, classifier1, auto_params1]
@@ -111,6 +123,9 @@ for num, net in enumerate([net1, net2]):
 
   for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_gen):
+      if torch.cuda.is_available():
+        images = images.to(device)
+        labels = labels.to(device)
 
       autoencoder_optimizer.zero_grad()
       classifier_optimizer.zero_grad()
@@ -126,7 +141,10 @@ for num, net in enumerate([net1, net2]):
 
       # Train classifier
       outputs = classifier(encoded.detach())
-      labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+      if torch.cuda.is_available():
+        labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.cuda.FloatTensor)
+      else:
+        labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
       output_loss = loss_function(outputs, labels)
       output_loss.backward()
       classifier_optimizer.step()
@@ -137,6 +155,8 @@ for num, net in enumerate([net1, net2]):
         print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,' \
                    %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, class_loss, auto_loss))
         dupe = Variable(decoded[0].data, requires_grad=False)
+        if torch.cuda.is_available():
+          dupe = dupe.cpu()
         # plt.imshow(img_fix(images[0]))
         # plt.show()
         # plt.imshow(img_fix(dupe))
@@ -145,14 +165,21 @@ for num, net in enumerate([net1, net2]):
         class_train_losses[num].append(class_loss)
         steps[num].append((50000 * epoch) + ((i + 1) * batch_size))
 
+        if torch.cuda.is_available():
+          images = images.cpu()
         real_imgs[num].append(img_fix(images[0].clone()))
         reconstructed_imgs[num].append(img_fix(dupe.clone()))
+        if torch.cuda.is_available():
+          images = images.cuda()
 
         # Test Data
         # Calculate train loss for image generation
         score = 0
         total = 0
         for images, labels in test_gen:
+          if torch.cuda.is_available():
+            images = images.cuda()
+            lables = labels.cuda()
           output = decoder(encoder(images))
           score += loss_function(output, images).item()
           total += 1
@@ -162,8 +189,13 @@ for num, net in enumerate([net1, net2]):
         score = 0
         total = 0
         for images, labels in test_gen:
+          if torch.cuda.is_available():
+            images = images.cuda()
           output = classifier(encoder(images))
-          labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+          if torch.cuda.is_available():
+            labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.cuda.FloatTensor)
+          else:
+            labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
           score += loss_function(output, labels).item()
           total += 1
         class_test_losses[num].append((score / total))

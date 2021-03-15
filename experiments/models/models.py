@@ -37,6 +37,32 @@ class ConvModulator(nn.Module):
 
         return out
 
+class ConvModulatorWithPooling(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        super().__init__()
+
+        self.soft = torch.nn.Softmax(dim=1)
+        self.reflexor_size = reflexor_size
+
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=(10,10), padding=5)
+        self.pool = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(in_channels=3, out_channels=reflexor_size, kernel_size=3, padding=1)
+
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+
+
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.pool(out)
+        out = self.conv2(out)
+        out = torch.sigmoid(out)
+
+        return out
+
 class ConvolutionalEncoder(nn.Module):
 
     def __init__(self, reflexor_size):
@@ -65,15 +91,36 @@ class ConvolutionalEncoder(nn.Module):
 
         return out
 
-class ModulatedConvolutionalEncoder(nn.Module):
+class ConvEncoderModulator(nn.Module):
 
     def __init__(self, reflexor_size):
+
+        super().__init__()
+
+        self.encoder = ConvolutionalEncoder(reflexor_size)
+        self.sigmoid = torch.sigmoid
+
+    def forward(self, x):
+
+        out = self.encoder(x)
+        out = self.sigmoid(x)
+
+        return out
+
+
+class ModulatedConvolutionalEncoder(nn.Module):
+
+    def __init__(self, reflexor_size, modulator=None):
 
         self.reflexor_size = reflexor_size
 
         super().__init__()
 
-        self.mod = ConvModulator(reflexor_size)
+        if(modulator == None):
+            self.mod = modulator
+        else:
+            self.mod = ConvModulator(reflexor_size)
+
         self.encoder = ConvolutionalEncoder(reflexor_size)
 
     def forward(self, x):

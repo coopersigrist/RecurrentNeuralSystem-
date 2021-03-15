@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from tqdm import tqdm
 from typing import Optional, Union, Tuple, List, Sequence, Iterable
-from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder
+from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder, ConvEncoderModulator
 import math
 from scipy.spatial.distance import euclidean
 from torch.nn.modules.utils import _pair
@@ -41,6 +41,8 @@ import matplotlib.pyplot as plt
 # see http://stackoverflow.com/questions/1907993/autoreload-of-modules-in-ipython
 # %load_ext autoreload
 # %autoreload 2
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 """# TRAINING"""
 
@@ -74,7 +76,8 @@ decoder1 = ConvolutionalDecoder(reflexor_size)
 classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10)
 auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
 
-encoder2 = ModulatedConvolutionalEncoder(reflexor_size)
+mod2 = ConvEncoderModulator(reflexor_size)
+encoder2 = ModulatedConvolutionalEncoder(reflexor_size, modulator=mod2)
 decoder2 = ConvolutionalDecoder(reflexor_size)
 classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
@@ -111,6 +114,9 @@ for num, net in enumerate([net1, net2]):
 
   for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_gen):
+
+      images = images.to(device)
+      labels = labels.to(device)
 
       autoencoder_optimizer.zero_grad()
       classifier_optimizer.zero_grad()

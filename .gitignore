@@ -159,3 +159,6 @@ dmypy.json
 
 # datasets
 experiments/data/
+
+# results
+.results

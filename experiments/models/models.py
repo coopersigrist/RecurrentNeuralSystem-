@@ -487,11 +487,11 @@ class RecDepthLimited(nn.Module):
             out = x.view(-1, self.in_size)
 
             # FIRST RECURENCE LAYER
-            first_half = out[:, :self.in_size//2]
+            first_half = out[:, ::2]
             rec1 = self.rec1(first_half)
 
             # SECOND RECURENCE LAYER
-            second_half = out[:, self.in_size//2:]
+            second_half = out[:, 1::2]
             rec2 = self.rec2(second_half)
 
             out = rec1 * rec2

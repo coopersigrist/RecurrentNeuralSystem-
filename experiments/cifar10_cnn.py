@@ -23,6 +23,7 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from tqdm import tqdm
 from typing import Optional, Union, Tuple, List, Sequence, Iterable
+from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder
 import math
 from scipy.spatial.distance import euclidean
 from torch.nn.modules.utils import _pair
@@ -32,197 +33,14 @@ import matplotlib.pyplot as plt
 
 # Commented out IPython magic to ensure Python compatibility.
 # %matplotlib inline
-plt.rcParams['figure.figsize'] = (10.0, 8.0) # set default size of plots
-plt.rcParams['image.interpolation'] = 'nearest'
-plt.rcParams['image.cmap'] = 'gray'
+# plt.rcParams['figure.figsize'] = (10.0, 8.0) # set default size of plots
+# plt.rcParams['image.interpolation'] = 'nearest'
+# plt.rcParams['image.cmap'] = 'gray'
 
 # for auto-reloading external modules
 # see http://stackoverflow.com/questions/1907993/autoreload-of-modules-in-ipython
 # %load_ext autoreload
 # %autoreload 2
-
-"""# MODELS
-
-"""
-
-class Modulator(nn.Module):
-
-    def __init__(self, reflexor_size):
-
-        super().__init__()
-
-        self.soft = torch.nn.Softmax(dim=1)
-        self.reflexor_size = reflexor_size
-
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=(10,10), padding=5)
-        self.conv2 = nn.Conv2d(in_channels=3, out_channels=reflexor_size, kernel_size=3, stride=2)
-
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-
-
-        out = self.conv1(x)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = torch.sigmoid(out)
-
-        return out
-
-class LinModulator(nn.Module):
-
-    def __init__(self, in_size, out_size):
-
-        self.in_size = in_size
-        self.out_size = out_size 
-
-        super().__init__()
-
-        self.soft = torch.nn.Softmax(dim=1)
-
-        self.fc1 = nn.Linear(in_size, out_size)
-
-    def forward(self, x):
-
-        out = self.fc1(x.view(-1, self.in_size))
-        out = torch.sigmoid(out)
-
-        return out
-
-class ConvolutionalEncoder(nn.Module):
-
-    def __init__(self, reflexor_size):
-
-        self.reflexor_size = reflexor_size
-
-        super().__init__()
-
-        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(32, reflexor_size, 3, padding=1)
-        self.relu = torch.relu
-        self.sigmoid = torch.sigmoid
-        self.batchnorm = nn.BatchNorm2d(32)
-        self.batchnormr = nn.BatchNorm2d(reflexor_size)
-
-    def forward(self, x):
-
-        out = self.conv1(x)
-        out = self.relu(out)
-        out = self.batchnorm(out)
-        out = self.conv2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-        out = self.batchnormr(out)
-
-        return out
-
-class ModulatedConvolutionalEncoder(nn.Module):
-
-    def __init__(self, reflexor_size):
-
-        self.reflexor_size = reflexor_size
-
-        super().__init__()
-
-        self.mod = Modulator(reflexor_size)
-        self.encoder = ConvolutionalEncoder(reflexor_size)
-
-    def forward(self, x):
-
-        mod = self.mod(x)
-        out = self.encoder(x)
-        out = out * mod
-
-        return out
-
-class ConvolutionalDecoder(nn.Module):
-
-    def __init__(self, reflexor_size):
-
-        self.reflexor_size = reflexor_size
-
-        super().__init__()
-
-        self.conv1 = nn.Conv2d(reflexor_size, 32, 3, padding=1)
-        self.conv2 = nn.Conv2d(32, 3, 1)
-        self.upsample = nn.Upsample(scale_factor=2)
-        self.relu = torch.relu
-        self.sigmoid = torch.sigmoid
-        self.batchnorm = nn.BatchNorm2d(32)
-
-    def forward(self, x):
-
-        out = self.upsample(x)
-        out = self.conv1(out)
-        out = self.relu(out)
-        out = self.batchnorm(out)
-        out = self.conv2(out)
-        out = self.sigmoid(out)
-
-        return out
-
-class ConvolutionalAutoEncoder(nn.Module):
-
-    def __init__(self, reflexor_size, encoder=None, decoder=None):
-
-        self.reflexor_size = reflexor_size
-
-        super().__init__()
-
-        self.encoder = ConvolutionalEncoder(reflexor_size)
-        self.decoder = ConvolutionalDecoder(reflexor_size)
-
-    def forward(self, x):
-
-        out = self.encoder(x)
-        out = self.decoder(out)
-
-        return out
-
-class ModulatedConvolutionalAutoEncoder(nn.Module):
-
-    def __init__(self, reflexor_size, encoder=None, decoder=None):
-
-        self.reflexor_size = reflexor_size
-
-        super().__init__()
-
-        self.mod = Modulator(reflexor_size)
-        self.encoder = ModulatedConvolutionalEncoder(reflexor_size)
-        self.decoder = ConvolutionalDecoder(reflexor_size)
-
-    def forward(self, x):
-
-        mod = self.mod(x)
-        out = self.encoder(out)
-        out = self.decoder(out)
-
-        return out
-
-class ConvolutionalEncoderClassifier(nn.Module):
-    def __init__(self, reflexor_size, n_classes):
-
-      self.reflexor_size = reflexor_size
-
-      super().__init__()
-
-      self.fc1 = nn.Linear(reflexor_size * 16 ** 2, 500)
-      self.fc2 = nn.Linear(500, n_classes)
-      self.sigmoid = torch.sigmoid
-      self.batchnorm = nn.BatchNorm1d(500)
-      self.relu = torch.relu
-
-    def forward(self, x):
-
-      out = x.view(-1, reflexor_size * 16 ** 2)
-      out = self.fc1(out)
-      out = self.batchnorm(out)
-      out = self.relu(out)
-      out = self.fc2(out)
-      out = self.sigmoid(out)
-
-      return out
 
 """# TRAINING"""
 
@@ -248,7 +66,7 @@ train_gen = torch.utils.data.DataLoader(dataset = train_data,
                                              shuffle = True)
 
 test_gen = torch.utils.data.DataLoader(dataset = test_data,
-                                      batch_size = batch_size, 
+                                      batch_size = batch_size,
                                       shuffle = False)
 
 encoder1 = ConvolutionalEncoder(reflexor_size)
@@ -264,7 +82,7 @@ auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
 net1 = [encoder1, decoder1, classifier1, auto_params1]
 net2 = [encoder2, decoder2, classifier2, auto_params2]
 
-lr = 1e-5 # size of step 
+lr = 1e-5 # size of step
 loss_function = nn.MSELoss()
 
 # Unnormalize the image to display it
@@ -293,10 +111,10 @@ for num, net in enumerate([net1, net2]):
 
   for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_gen):
-      
+
       autoencoder_optimizer.zero_grad()
       classifier_optimizer.zero_grad()
-      
+
       # Generate encoded features
       encoded = encoder(images)
 
@@ -312,12 +130,12 @@ for num, net in enumerate([net1, net2]):
       output_loss = loss_function(outputs, labels)
       output_loss.backward()
       classifier_optimizer.step()
-      
+
       if (i+1) % 300 == 0:
         auto_loss = decoder_loss.item()
         class_loss = output_loss.item()
-        print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,'
-#                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, class_loss, auto_loss))
+        print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,' \
+                   %(epoch+1, num_epochs, i+1, len(train_data)//batch_size, class_loss, auto_loss))
         dupe = Variable(decoded[0].data, requires_grad=False)
         # plt.imshow(img_fix(images[0]))
         # plt.show()
@@ -337,7 +155,8 @@ for num, net in enumerate([net1, net2]):
         for images, labels in test_gen:
           output = decoder(encoder(images))
           score += loss_function(output, images).item()
-        auto_test_losses[num].append((score))
+          total += 1
+        auto_test_losses[num].append((score / total))
 
         # Calculate train loss for image classification
         score = 0
@@ -346,7 +165,8 @@ for num, net in enumerate([net1, net2]):
           output = classifier(encoder(images))
           labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
           score += loss_function(output, labels).item()
-        class_test_losses[num].append((score))
+          total += 1
+        class_test_losses[num].append((score / total))
 
 plt.plot(steps[0], auto_train_losses[0], label= "Baseline")
 plt.plot(steps[1], auto_train_losses[1], label= "Modulated")
@@ -371,7 +191,7 @@ plt.plot(steps[1], auto_test_losses[1], label= "Modulated")
 plt.plot(steps[2], auto_test_losses[2], label= "Recurrent with Modulation")
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('Autoencoder training loss history')
+plt.title('Autoencoder test loss history')
 plt.legend()
 plt.show()
 

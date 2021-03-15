@@ -91,7 +91,7 @@ loss_function = nn.MSELoss()
 
 # Unnormalize the image to display it
 def img_fix(img):
-  return np.transpose((img).numpy(), (1, 2, 0))
+  return np.transpose((img.cpu()).numpy(), (1, 2, 0))
 
 # Commented out IPython magic to ensure Python compatibility.
 auto_train_losses = [[],[],[]]
@@ -117,7 +117,6 @@ for num, net in enumerate([net1, net2]):
     for i, (images, labels) in enumerate(train_gen):
 
       images = images.to(device)
-      labels = labels.to(device)
 
       autoencoder_optimizer.zero_grad()
       classifier_optimizer.zero_grad()
@@ -133,7 +132,7 @@ for num, net in enumerate([net1, net2]):
 
       # Train classifier
       outputs = classifier(encoded.detach())
-      labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+      labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
       output_loss = loss_function(outputs, labels)
       output_loss.backward()
       classifier_optimizer.step()

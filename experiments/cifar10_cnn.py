@@ -43,6 +43,7 @@ import matplotlib.pyplot as plt
 # %autoreload 2
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device:", device)
 
 """# TRAINING"""
 
@@ -71,15 +72,15 @@ test_gen = torch.utils.data.DataLoader(dataset = test_data,
                                       batch_size = batch_size,
                                       shuffle = False)
 
-encoder1 = ConvolutionalEncoder(reflexor_size)
-decoder1 = ConvolutionalDecoder(reflexor_size)
-classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+encoder1 = ConvolutionalEncoder(reflexor_size).to(device)
+decoder1 = ConvolutionalDecoder(reflexor_size).to(device)
+classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
 auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
 
-mod2 = ConvEncoderModulator(reflexor_size)
-encoder2 = ModulatedConvolutionalEncoder(reflexor_size, modulator=mod2)
-decoder2 = ConvolutionalDecoder(reflexor_size)
-classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10)
+mod2 = ConvEncoderModulator(reflexor_size).to(device)
+encoder2 = ModulatedConvolutionalEncoder(reflexor_size, modulator=mod2).to(device)
+decoder2 = ConvolutionalDecoder(reflexor_size).to(device)
+classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
 
 net1 = [encoder1, decoder1, classifier1, auto_params1]
@@ -159,6 +160,7 @@ for num, net in enumerate([net1, net2]):
         score = 0
         total = 0
         for images, labels in test_gen:
+          images = images.to(device)
           output = decoder(encoder(images))
           score += loss_function(output, images).item()
           total += 1
@@ -168,8 +170,10 @@ for num, net in enumerate([net1, net2]):
         score = 0
         total = 0
         for images, labels in test_gen:
+          images = images.to(device)
+          labels = labels.to(device)
           output = classifier(encoder(images))
-          labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor)
+          labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
           score += loss_function(output, labels).item()
           total += 1
         class_test_losses[num].append((score / total))

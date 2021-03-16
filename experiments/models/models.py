@@ -507,12 +507,14 @@ class RecDepthLimitedConcat(nn.Module):
             self.mod = modulator
             self.relu = nn.ReLU()
         else:
+            if reflexor_size % 2 != 0:
+                reflexor_size -= 1
             self.mod1 = LinModulator(in_size, reflexor_size)
-            self.mod2 = LinModulator(in_size//2, reflexor_size//4)
-            self.mod3 = LinModulator(in_size//2, reflexor_size//4)
+            self.mod2 = LinModulator((in_size//4) * 2, reflexor_size//4)
+            self.mod3 = LinModulator((in_size//4) * 2, reflexor_size//4)
 
-            self.rec1 = RecDepthLimited(in_size//2, reflexor_size//2, reflexor_size//4, self.mod2, depth + 1, max_depth)
-            self.rec2 = RecDepthLimited(in_size//2, reflexor_size//2, reflexor_size//4, self.mod3, depth + 1, max_depth)
+            self.rec1 = RecDepthLimitedConcat(in_size//2, reflexor_size//2, reflexor_size//4, self.mod2, depth + 1, max_depth)
+            self.rec2 = RecDepthLimitedConcat(in_size//2, reflexor_size//2, reflexor_size//4, self.mod3, depth + 1, max_depth)
 
             self.fc1 = nn.Linear(reflexor_size, (reflexor_size + out_size) // 2)
             self.fc2 = nn.Linear((reflexor_size + out_size) // 2, out_size)
@@ -533,17 +535,98 @@ class RecDepthLimitedConcat(nn.Module):
 
             # FIRST RECURENCE LAYER
             first_half = out[:, ::2]
-            if first_half.shape[1] > out.shape[1] // 2:
+            if first_half.shape[1] > (out.shape[1] // 4) * 2:
                 first_half = first_half[:, :-1]
+            if first_half.shape[1] < (out.shape[1] // 4) * 2:
+                for dim1 in range(len(first_half)):
+                    first_half[dim1].append(first_half[dim1][-1])
             rec1 = self.rec1(first_half)
 
             # SECOND RECURENCE LAYER
             second_half = out[:, 1::2]
-            if second_half.shape[1] > out.shape[1] // 2:
+            if second_half.shape[1] > (out.shape[1] // 4) * 2:
                 second_half = second_half[:, :-1]
+            if second_half.shape[1] < (out.shape[1] // 4) * 2:
+                for dim1 in range(len(second_half)):
+                    second_half[dim1].append(second_half[dim1][-1])
             rec2 = self.rec2(second_half)
 
             out = torch.cat((rec1, rec2), dim=1)
+
+            out = self.relu(out)
+            out = out * mod1
+            out = self.relu(out)
+
+            out = self.fc1(out)
+            out = self.relu(out)
+            out = self.fc2(out)
+
+        return out
+
+class RecDepthLimitedEncodeOnly(nn.Module):
+
+    def __init__(self, in_size, out_size, reflexor_size, modulator, depth, max_depth):
+
+        self.in_size = in_size
+        self.out_size = out_size
+        self.reflexor_size = reflexor_size
+        self.depth = depth
+        self.max_depth = max_depth
+
+        super().__init__()
+
+        if depth == max_depth:
+            self.fc1 = nn.Linear(in_size, reflexor_size)
+            self.fc2 = nn.Linear(reflexor_size, out_size)
+            self.mod = modulator
+            self.relu = nn.ReLU()
+        else:
+            if reflexor_size % 2 != 0:
+                reflexor_size -= 1
+            self.mod1 = LinModulator(in_size, reflexor_size)
+            self.mod2 = LinModulator((in_size//4) * 2, reflexor_size//4)
+            self.mod3 = LinModulator((in_size//4) * 2, reflexor_size//4)
+
+            self.rec1 = RecDepthLimitedEncodeOnly(in_size//2, reflexor_size//2, reflexor_size//4, self.mod2, depth + 1, max_depth)
+            self.rec2 = RecDepthLimitedEncodeOnly(in_size//2, reflexor_size//2, reflexor_size//4, self.mod3, depth + 1, max_depth)
+
+            self.fc1 = nn.Linear(reflexor_size, (reflexor_size + out_size) // 2)
+            self.fc2 = nn.Linear((reflexor_size + out_size) // 2, out_size)
+
+            self.relu = nn.ReLU()
+
+    def forward(self, x):
+
+        if self.depth == self.max_depth:
+            mod = self.mod(x)
+            out = self.fc1(x.view(-1, self.in_size))
+            out = self.relu(out)
+            out = out * mod
+            out = self.fc2(out)
+        else:
+            mod1 = self.mod1(x)
+            out = x.view(-1, self.in_size)
+
+            # FIRST RECURENCE LAYER
+            first_half = out[:, ::2]
+            if first_half.shape[1] > (out.shape[1] // 4) * 2:
+                first_half = first_half[:, :-1]
+            if first_half.shape[1] < (out.shape[1] // 4) * 2:
+                for dim1 in range(len(first_half)):
+                    first_half[dim1].append(first_half[dim1][-1])
+            rec1 = self.rec1(first_half)
+
+            # SECOND RECURENCE LAYER
+            second_half = out[:, 1::2]
+            if second_half.shape[1] > (out.shape[1] // 4) * 2:
+                second_half = second_half[:, :-1]
+            if second_half.shape[1] < (out.shape[1] // 4) * 2:
+                for dim1 in range(len(second_half)):
+                    second_half[dim1].append(second_half[dim1][-1])
+            rec2 = self.rec2(second_half)
+
+            out = torch.cat((rec1, rec2), dim=1)
+
             out = self.relu(out)
             out = out * mod1
             out = self.relu(out)

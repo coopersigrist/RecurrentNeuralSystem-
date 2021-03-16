@@ -38,17 +38,20 @@ if torch.cuda.is_available():
     mod = Modulator(784, (4, 4), reflexor_size).cuda()
     net4 = RecDepthLimitedConcat(784, 784, reflexor_size, mod, 0, 3).cuda()
     mod2 = Modulator(784, (4, 4), reflexor_size).cuda()
-    net5 = RecDepthLimitedEncodeOnly(784, 784, reflexor_size, mod, 0, 3).cuda()
+    net5 = RecDepthLimitedEncodeOnly(784, 784, reflexor_size, mod, 3).cuda()
 else:
     net1 = RegularAutoEncoder(784, 784, reflexor_size)
     net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
     mod = Modulator(784, (4, 4), reflexor_size)
     net4 = RecDepthLimitedConcat(784, 784, reflexor_size, mod, 0, 3)
     mod2 = Modulator(784, (4, 4), reflexor_size)
-    net5 = RecDepthLimitedEncodeOnly(784, 784, reflexor_size, mod, 0, 3)
+    net5 = RecDepthLimitedEncodeOnly(784, 784, reflexor_size, mod, 3)
 
 nets = [net1, net2, net4, net5]
 names = ["Regular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 3 EO"]
+
+# nets = [net5]
+# names = ["RecDepthLimited 3 EO"]
 
 num_nets = len(nets)
 

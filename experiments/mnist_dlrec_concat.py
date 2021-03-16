@@ -48,7 +48,7 @@ else:
     net5 = RecDepthLimitedConcat(784, 784, reflexor_size, mod, 0, 3)
 
 nets = [net1, net2, net4, net5]
-names = ["Regeular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 3 Concat"]
+names = ["Regular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 3 Concat"]
 num_nets = len(nets)
 
 lr = .0001  # size of step

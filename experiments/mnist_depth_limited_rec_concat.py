@@ -6,7 +6,7 @@ import torchvision.datasets as dsets
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
-from models.models import RegularAutoEncoder, ModulatedAutoEncoder, RecDepthLimited, Modulator
+from models.models import RegularAutoEncoder, ModulatedAutoEncoder, RecDepthLimited, RecDepthLimitedConcat, Modulator
 import time
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -38,17 +38,17 @@ if torch.cuda.is_available():
     mod = Modulator(784, (4, 4), reflexor_size).cuda()
     net4 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 3).cuda()
     mod2 = Modulator(784, (4, 4), reflexor_size).cuda()
-    net5 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 6).cuda()
+    net5 = RecDepthLimitedConcat(784, 784, reflexor_size, mod, 0, 3).cuda()
 else:
     net1 = RegularAutoEncoder(784, 784, reflexor_size)
     net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
     mod = Modulator(784, (4, 4), reflexor_size)
     net4 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 3)
     mod2 = Modulator(784, (4, 4), reflexor_size)
-    net5 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 6)
+    net5 = RecDepthLimitedConcat(784, 784, reflexor_size, mod, 0, 3)
 
 nets = [net1, net2, net4, net5]
-names = ["Regeular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 6"]
+names = ["Regeular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 3 Concat"]
 num_nets = len(nets)
 
 lr = .0001  # size of step

@@ -469,8 +469,8 @@ class RecDepthLimited(nn.Module):
             self.rec1 = RecDepthLimited(in_size//2, reflexor_size, reflexor_size//2, self.mod2, depth + 1, max_depth)
             self.rec2 = RecDepthLimited(in_size//2, reflexor_size, reflexor_size//2, self.mod3, depth + 1, max_depth)
 
-            self.fc1 = nn.Linear(reflexor_size, 200)
-            self.fc2 = nn.Linear(200, out_size)
+            self.fc1 = nn.Linear(reflexor_size, (reflexor_size + out_size) // 2)
+            self.fc2 = nn.Linear((reflexor_size + out_size) // 2, out_size)
 
             self.relu = nn.ReLU()
 
@@ -488,10 +488,14 @@ class RecDepthLimited(nn.Module):
 
             # FIRST RECURENCE LAYER
             first_half = out[:, ::2]
+            if first_half.shape[1] > out.shape[1] // 2:
+                first_half = first_half[:, :-1]
             rec1 = self.rec1(first_half)
 
             # SECOND RECURENCE LAYER
             second_half = out[:, 1::2]
+            if second_half.shape[1] > out.shape[1] // 2:
+                second_half = second_half[:, :-1]
             rec2 = self.rec2(second_half)
 
             out = rec1 * rec2

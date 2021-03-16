@@ -35,37 +35,45 @@ reflexor_size = 100
 if torch.cuda.is_available():
     net1 = RegularAutoEncoder(784, 784, reflexor_size).cuda()
     net2 = ModulatedAutoEncoder(784, 784, reflexor_size).cuda()
-    net3 = PseudoRecAutoEncoder(784, 784, reflexor_size).cuda()
     mod = Modulator(784, (4, 4), reflexor_size).cuda()
     net4 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 3).cuda()
+    mod2 = Modulator(784, (4, 4), reflexor_size).cuda()
+    net5 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 6).cuda()
 else:
     net1 = RegularAutoEncoder(784, 784, reflexor_size)
     net2 = ModulatedAutoEncoder(784, 784, reflexor_size)
-    net3 = PseudoRecAutoEncoder(784, 784, reflexor_size)
     mod = Modulator(784, (4, 4), reflexor_size)
     net4 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 3)
+    mod2 = Modulator(784, (4, 4), reflexor_size)
+    net5 = RecDepthLimited(784, 784, reflexor_size, mod, 0, 6)
 
+nets = [net1, net2, net4, net5]
+names = ["Regeular AutoEncoder", "Modulated AutoEncoder", "RecDepthLimited 3", "RecDepthLimited 6"]
+num_nets = len(nets)
 
 lr = .0001  # size of step
 loss_function = nn.MSELoss()
 
-train_losses = [[], [], [], []]
-test_losses = [[], [], [], []]
+train_losses = []
+test_losses = []
+real_imgs = []
+reconstructed_imgs = []
+steps = []
+for n in range(num_nets):
+    train_losses.append([])
+    test_losses.append([])
+    real_imgs.append([])
+    reconstructed_imgs.append([])
+    steps.append([])
 
-real_imgs = [[], [], [], []]
-reconstructed_imgs = [[], [], [], []]
+param_counts = np.ones(num_nets)
 
-param_counts = np.ones(4)
-
-steps = [[], [], [], []]
-
-nets = [net1, net2, net3, net4]
 for num, net in enumerate(nets):
-    print("Net ", num, ",", net, "\n")
+    print("Net ", num, ",", names[num], "\n")
 
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     param_counts[num] = (sum(p.numel()
-                        for p in net.parameters() if p.requires_grad))
+                             for p in net.parameters() if p.requires_grad))
 
     start = time.time()
     for epoch in range(num_epochs):
@@ -118,22 +126,16 @@ for num, net in enumerate(nets):
                 test_losses[num].append((score))
 print("Training time:", round(time.time() - start), "seconds")
 
-plt.plot(steps[0], train_losses[0], label="Baseline")
-plt.plot(steps[1], train_losses[1], label="Modulated")
-plt.plot(steps[2], train_losses[2], label="Recurrent with Modulation")
-plt.plot(steps[3], train_losses[3],
-         label="Recurrent with Modulation Depth Limited")
+for i in range(num_nets):
+    plt.plot(steps[i], train_losses[i], label=names[i])
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
 plt.title('Training loss history')
 plt.legend()
 plt.show()
 
-plt.plot(steps[0], test_losses[0], label="Baseline")
-plt.plot(steps[1], test_losses[1], label="Modulated")
-plt.plot(steps[2], test_losses[2], label="Recurrent with Modulation")
-plt.plot(steps[3], test_losses[3],
-         label="Recurrent with Modulation Depth Limited")
+for i in range(num_nets):
+    plt.plot(steps[i], test_losses[i], label=names[i])
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
 plt.title('Testing loss history')
@@ -143,14 +145,14 @@ plt.show()
 for num, count in enumerate(param_counts):
     param_counts[num] /= 1000
 
-plt.bar(["Base", "Modulated", "ReNS", "Depth Limited"], param_counts)
+plt.bar(names, param_counts)
 plt.xlabel('Model')
 plt.ylabel('# of thousands of Parameters')
 plt.show()
 
 num_smaples = len(real_imgs[0])
 
-for num in [0, 1, 2, 3]:
+for num in range(num_nets):
     fig = plt.figure(figsize=(20., 20.))
     grid = ImageGrid(fig, 111,  # similar to subplot(111)
                      nrows_ncols=(2, num_smaples),  # creates 2x2 grid of axes

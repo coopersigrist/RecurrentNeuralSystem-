@@ -103,7 +103,7 @@ class ConvEncoderModulator(nn.Module):
     def forward(self, x):
 
         out = self.encoder(x)
-        out = self.sigmoid(x)
+        out = self.sigmoid(out)
 
         return out
 
@@ -117,9 +117,9 @@ class ModulatedConvolutionalEncoder(nn.Module):
         super().__init__()
 
         if(modulator == None):
-            self.mod = modulator
-        else:
             self.mod = ConvModulator(reflexor_size)
+        else:
+            self.mod = modulator
 
         self.encoder = ConvolutionalEncoder(reflexor_size)
 
@@ -211,6 +211,105 @@ class ConvolutionalEncoderClassifier(nn.Module):
 
       out = x.view(-1, self.reflexor_size * 16 ** 2)
       out = self.fc1(out)
+      out = self.batchnorm(out)
+      out = self.relu(out)
+      out = self.fc2(out)
+      out = self.sigmoid(out)
+
+      return out
+
+# Flat reflexor experiment
+class FlattenedConvEncoderModulator(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        super().__init__()
+
+        self.encoder = ConvolutionalEncoder(reflexor_size)
+        self.sigmoid = torch.sigmoid
+
+    def forward(self, x):
+
+        out = self.encoder(x)
+        out = out.view(-1, 10 * 16 ** 2)
+        out = self.sigmoid(out)
+
+        return out
+
+class FlattenedConvolutionalEncoder(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.encoder = ConvolutionalEncoder(10)
+        self.fc = nn.Linear(10 * 16 ** 2, reflexor_size)
+
+    def forward(self, x):
+
+        out = self.encoder(x)
+        out = out.view(-1, 10 * 16 ** 2)
+        out = self.fc(out)
+
+        return out
+
+class ModulatedFlattenedConvolutionalEncoder(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.encoder = ConvolutionalEncoder(10)
+        self.mod = FlattenedConvEncoderModulator(10)
+        self.fc = nn.Linear(10 * 16 ** 2, reflexor_size)
+
+    def forward(self, x):
+        mod = self.mod(x)
+        out = self.encoder(x)
+        out = out.view(-1, 10 * 16 ** 2)
+        out = out * mod
+        out = self.fc(out)
+
+        return out
+
+class FlattenedConvolutionalDecoder(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.fc = nn.Linear(reflexor_size, 10 * 16 ** 2)
+        self.decoder = ConvolutionalDecoder(10)
+
+    def forward(self, x):
+
+        out = self.fc(x)
+        out = out.view(-1, 10, 16, 16)
+        out = self.decoder(out)
+
+        return out
+
+class FlattenedEncoderClassifier(nn.Module):
+    def __init__(self, reflexor_size, n_classes):
+
+      self.reflexor_size = reflexor_size
+
+      super().__init__()
+
+      self.fc1 = nn.Linear(reflexor_size, 500)
+      self.fc2 = nn.Linear(500, n_classes)
+      self.sigmoid = torch.sigmoid
+      self.batchnorm = nn.BatchNorm1d(500)
+      self.relu = torch.relu
+
+    def forward(self, x):
+      out = self.fc1(x)
       out = self.batchnorm(out)
       out = self.relu(out)
       out = self.fc2(out)

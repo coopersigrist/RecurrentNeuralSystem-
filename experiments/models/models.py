@@ -218,7 +218,7 @@ class ConvolutionalEncoderClassifier(nn.Module):
 
       return out
 
-# Flat reflexor experiment
+# BEGIN flat reflexor experiment
 class FlattenedConvEncoderModulator(nn.Module):
 
     def __init__(self, reflexor_size):
@@ -316,6 +316,65 @@ class FlattenedEncoderClassifier(nn.Module):
       out = self.sigmoid(out)
 
       return out
+# END flat reflexor experiment
+
+# BEGIN pre reflexor layer experiment
+class PreReflexorConvEncoderModulator(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        self.relu = torch.relu
+        self.sigmoid = torch.sigmoid
+        self.batchnorm = nn.BatchNorm2d(32)
+        self.batchnormr = nn.BatchNorm2d(reflexor_size)
+
+    def forward(self, x):
+
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.batchnorm(out)
+        out = self.conv2(out)
+        out = self.sigmoid(out)
+
+        return out
+
+class PreReflexorModulatedConvEncoder(nn.Module):
+
+    def __init__(self, reflexor_size):
+
+        self.reflexor_size = reflexor_size
+
+        super().__init__()
+
+        self.mod = PreReflexorConvEncoderModulator(reflexor_size)
+        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(32, reflexor_size, 3, padding=1)
+        self.relu = torch.relu
+        self.sigmoid = torch.sigmoid
+        self.batchnorm = nn.BatchNorm2d(32)
+        self.batchnormr = nn.BatchNorm2d(reflexor_size)
+
+    def forward(self, x):
+
+        mod = self.mod(x)
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.batchnorm(out)
+        out = self.conv2(out)
+        out = self.relu(out)
+        out = out * mod
+        out = self.conv3(out)
+        out = self.batchnormr(out)
+
+        return out
+# END pre reflexor layer experiment
 
 class recurrentLayer(nn.Module):
 

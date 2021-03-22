@@ -54,17 +54,17 @@ reflexor_size = 10
 image_size = 32
 channels = 3
 
+# Transform FashionMNIST to same input shape as CIFAR10
 transform = transforms.Compose([transforms.Grayscale(num_output_channels=3),
                                 transforms.Resize(32, 32),
                                 transforms.ToTensor()])
 
 # Load data.
-
 cifar_train_data = dsets.CIFAR10(root = './data', train = True,
-                        transform = transform, download = True)
+                        transform = transforms.ToTensor(), download = True)
 
 cifar_test_data = dsets.CIFAR10(root = './data', train = False,
-                       transform = transform)
+                       transform = transforms.ToTensor())
 
 fmnist_train_data = dsets.FashionMNIST(root = './data', train = True,
                         transform = transform, download = True)
@@ -89,24 +89,29 @@ fmnist_test_gen = torch.utils.data.DataLoader(dataset = cifar_test_data,
                                       shuffle = False)
 
 train_data = [cifar_train_data, fmnist_train_data]
-test_data = [cifar_test_data, fmnist_test_data]
+test_data  = [cifar_test_data, fmnist_test_data]
 train_gens = [cifar_train_gen, fmnist_train_gen]
-test_gens = [cifar_test_gen, fmnist_test_gen]
+test_gens  = [cifar_test_gen, fmnist_test_gen]
 dataset_names = ['CIFAR10', 'FashionMNIST']
 
+# MODELS
 encoder1 = ConvolutionalEncoder(reflexor_size).to(device)
 decoder1 = ConvolutionalDecoder(reflexor_size).to(device)
 classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
 auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
+class_params1 = list(encoder1.parameters()) + list(classifier1.parameters())
 
 # mod2 = ConvEncoderModulator(reflexor_size).to(device)
 encoder2 = ModulatedConvolutionalEncoder(reflexor_size).to(device)
 decoder2 = ConvolutionalDecoder(reflexor_size).to(device)
 classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
+class_params2 = list(encoder2.parameters()) + list(classifier2.parameters())
 
-net1 = [encoder1, decoder1, classifier1, auto_params1]
-net2 = [encoder2, decoder2, classifier2, auto_params2]
+# Baseline model
+net1 = [encoder1, decoder1, classifier1, auto_params1, class_params1]
+# Modulated model
+net2 = [encoder2, decoder2, classifier2, auto_params2, class_params2]
 
 lr = 1e-5 # size of step
 loss_function = nn.MSELoss()
@@ -129,7 +134,6 @@ reconstructed_imgs = [[],[]]
 
 param_counts = np.ones(2)
 
-
 for dset_idx, train_gen in enumerate(train_gens):
     print('Dataset:', dataset_names[dset_idx])
     auto_train_losses.append([])
@@ -139,11 +143,11 @@ for dset_idx, train_gen in enumerate(train_gens):
     steps.append([])
 
     for num, net in enumerate([net1, net2]):
-      encoder, decoder, classifier, params = net
+      encoder, decoder, classifier, auto_params, class_params = net
 
-      autoencoder_optimizer = torch.optim.Adam(params, lr=lr)
-      classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
-      param_counts[num] = (sum(p.numel() for p in params if p.requires_grad))
+      autoencoder_optimizer = torch.optim.Adam(auto_params, lr=lr)
+      classifier_optimizer = torch.optim.Adam(class_params, lr=lr)
+      param_counts[num] = (sum(p.numel() for p in auto_params if p.requires_grad))
 
       auto_train_losses[dset_idx].append([])
       auto_test_losses[dset_idx].append([])
@@ -162,27 +166,30 @@ for dset_idx, train_gen in enumerate(train_gens):
           # Generate encoded features
           encoded = encoder(images)
 
-          # Train autoencoder
+          # Backprop autoencoder
           decoded = decoder(encoded)
           decoder_loss = loss_function(decoded, images)
-          decoder_loss.backward()
-          autoencoder_optimizer.step()
+          decoder_loss.backward(retain_graph=True)
 
-          # Train classifier
-          outputs = classifier(encoded.detach())
+          # Backprop classifier
+          outputs = classifier(encoded)
+          # outputs = classifier(encoded.detach())
           labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
           output_loss = loss_function(outputs, labels)
           output_loss.backward()
+
+          # Update weights
           classifier_optimizer.step()
+          autoencoder_optimizer.step()
 
           # Train neuromodulator + encoder on previous dataset if on new dataset
-          if(dset_idx != 0 and (i+1) % 100 == 0):
-            for first_images, first_labels in train_gens[0]:
-              first_images = first_images.to(device)
-              first_decoded = decoder(encoder(first_images))
-              first_decoder_loss = loss_function(first_decoded, first_images)
-              first_decoder_loss.backward()
-              autoencoder_optimizer.step()
+          # if(dset_idx != 0 and (i+1) % 200 == 0):
+          #   for first_images, first_labels in train_gens[0]:
+          #     first_images = first_images.to(device)
+          #     first_decoded = decoder(encoder(first_images))
+          #     first_decoder_loss = loss_function(first_decoded, first_images)
+          #     first_decoder_loss.backward()
+          #     autoencoder_optimizer.step()
 
           if (i+1) % 300 == 0:
             # Output and save current model task loss
@@ -196,7 +203,8 @@ for dset_idx, train_gen in enumerate(train_gens):
             class_train_losses[dset_idx][num].append(class_loss)
             steps[dset_idx][num].append((50000 * epoch) + ((i + 1) * batch_size))
 
-            # First task accuracy
+            # TEST DATA
+            # First task accuracy (CIFAR)
             score = 0
             total = 0
             for images, labels in test_gens[0]:
@@ -208,7 +216,6 @@ for dset_idx, train_gen in enumerate(train_gens):
               total += 1
             first_task_losses[num].append((score / total))
 
-            # Test Data
             # Calculate train loss for image generation
             score = 0
             total = 0
@@ -248,7 +255,7 @@ for dset_idx, data in enumerate(train_data):
     plt.plot(steps[dset_idx][1], auto_train_losses[dset_idx][1], label= "Modulated")
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.title('Autoencoder training loss history, Dataset ' + str(dset_idx))
+    plt.title('Autoencoder training loss history, Dataset: ' + dataset_names[dset_idx])
     plt.legend()
     plt.show()
 
@@ -257,7 +264,7 @@ for dset_idx, data in enumerate(train_data):
     plt.plot(steps[dset_idx][1], class_train_losses[dset_idx][1], label= "Modulated")
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.title('Classification training loss history, Dataset ' + str(dset_idx))
+    plt.title('Classification training loss history, Dataset: ' + dataset_names[dset_idx])
     plt.legend()
     plt.show()
 
@@ -266,7 +273,7 @@ for dset_idx, data in enumerate(train_data):
     plt.plot(steps[dset_idx][1], auto_test_losses[dset_idx][1], label= "Modulated")
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.title('Autoencoder test loss history, Dataset ' + str(dset_idx))
+    plt.title('Autoencoder test loss history, Dataset: ' + dataset_names[dset_idx])
     plt.legend()
     plt.show()
 
@@ -275,7 +282,7 @@ for dset_idx, data in enumerate(train_data):
     plt.plot(steps[dset_idx][1], class_test_losses[dset_idx][1], label= "Modulated")
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.title('Classification test loss history, Dataset ' + str(dset_idx))
+    plt.title('Classification test loss history, Dataset: ' + dataset_names[dset_idx])
     plt.legend()
     plt.show()
 
@@ -289,7 +296,6 @@ plt.title('First task classification loss history, Dataset 0')
 plt.legend()
 plt.show()
 
-print(param_counts)
 for num,count in enumerate(param_counts):
   param_counts[num] /= 1000
 

@@ -201,19 +201,24 @@ class ConvolutionalEncoderClassifier(nn.Module):
 
       super().__init__()
 
-      self.fc1 = nn.Linear(reflexor_size * 16 ** 2, 500)
-      self.fc2 = nn.Linear(500, n_classes)
+      self.fc1 = nn.Linear(reflexor_size * 16 ** 2, 1000)
+      self.fc2 = nn.Linear(1000, 500)
+      self.fc3 = nn.Linear(500, n_classes)
       self.sigmoid = torch.sigmoid
-      self.batchnorm = nn.BatchNorm1d(500)
+      self.batchnorm1 = nn.BatchNorm1d(1000)
+      self.batchnorm2 = nn.BatchNorm1d(500)
       self.relu = torch.relu
 
     def forward(self, x):
 
       out = x.view(-1, self.reflexor_size * 16 ** 2)
       out = self.fc1(out)
-      out = self.batchnorm(out)
+      out = self.batchnorm1(out)
       out = self.relu(out)
       out = self.fc2(out)
+      out = self.batchnorm2(out)
+      out = self.relu(out)
+      out = self.fc3(out)
       out = self.sigmoid(out)
 
       return out

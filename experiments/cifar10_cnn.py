@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from tqdm import tqdm
 from typing import Optional, Union, Tuple, List, Sequence, Iterable
-from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder, ConvEncoderModulator
+from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder, ConvEncoderModulator, PreReflexorModulatedConvEncoder
 import math
 from scipy.spatial.distance import euclidean
 from torch.nn.modules.utils import _pair
@@ -56,7 +56,7 @@ channels = 3
 
 # Transform FashionMNIST to same input shape as CIFAR10
 transform = transforms.Compose([transforms.Grayscale(num_output_channels=3),
-                                transforms.Resize(32, 32),
+                                transforms.Resize((32, 32)),
                                 transforms.ToTensor()])
 
 # Load data.
@@ -80,11 +80,11 @@ cifar_test_gen = torch.utils.data.DataLoader(dataset = cifar_test_data,
                                       batch_size = batch_size,
                                       shuffle = False)
 
-fmnist_train_gen = torch.utils.data.DataLoader(dataset = cifar_train_data,
+fmnist_train_gen = torch.utils.data.DataLoader(dataset = fmnist_train_data,
                                              batch_size = batch_size,
                                              shuffle = True)
 
-fmnist_test_gen = torch.utils.data.DataLoader(dataset = cifar_test_data,
+fmnist_test_gen = torch.utils.data.DataLoader(dataset = fmnist_test_data,
                                       batch_size = batch_size,
                                       shuffle = False)
 
@@ -102,7 +102,8 @@ auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
 class_params1 = list(encoder1.parameters()) + list(classifier1.parameters())
 
 # mod2 = ConvEncoderModulator(reflexor_size).to(device)
-encoder2 = ModulatedConvolutionalEncoder(reflexor_size).to(device)
+# encoder2 = ModulatedConvolutionalEncoder(reflexor_size).to(device)
+encoder2 = PreReflexorModulatedConvEncoder(reflexor_size).to(device)
 decoder2 = ConvolutionalDecoder(reflexor_size).to(device)
 classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
 auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())

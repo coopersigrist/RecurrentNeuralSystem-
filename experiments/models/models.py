@@ -204,7 +204,7 @@ class ConvolutionalEncoderClassifier(nn.Module):
       self.fc1 = nn.Linear(reflexor_size * 16 ** 2, 1000)
       self.fc2 = nn.Linear(1000, 500)
       self.fc3 = nn.Linear(500, n_classes)
-      self.sigmoid = torch.sigmoid
+      self.softmax = nn.Softmax(dim=1)
       self.batchnorm1 = nn.BatchNorm1d(1000)
       self.batchnorm2 = nn.BatchNorm1d(500)
       self.relu = torch.relu
@@ -219,7 +219,7 @@ class ConvolutionalEncoderClassifier(nn.Module):
       out = self.batchnorm2(out)
       out = self.relu(out)
       out = self.fc3(out)
-      out = self.sigmoid(out)
+      out = self.softmax(out)
 
       return out
 
@@ -309,7 +309,7 @@ class FlattenedEncoderClassifier(nn.Module):
 
       self.fc1 = nn.Linear(reflexor_size, 500)
       self.fc2 = nn.Linear(500, n_classes)
-      self.sigmoid = torch.sigmoid
+      self.softmax = nn.Softmax(dim=1)
       self.batchnorm = nn.BatchNorm1d(500)
       self.relu = torch.relu
 
@@ -318,7 +318,7 @@ class FlattenedEncoderClassifier(nn.Module):
       out = self.batchnorm(out)
       out = self.relu(out)
       out = self.fc2(out)
-      out = self.sigmoid(out)
+      out = self.softmax(out)
 
       return out
 # END flat reflexor experiment

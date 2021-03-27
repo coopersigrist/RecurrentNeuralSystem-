@@ -23,12 +23,12 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from tqdm import tqdm
 from typing import Optional, Union, Tuple, List, Sequence, Iterable
-from models.models import ConvolutionalEncoder, ConvolutionalDecoder, ConvolutionalEncoderClassifier, ModulatedConvolutionalEncoder, ConvEncoderModulator, PreReflexorModulatedConvEncoder
 import math
 from scipy.spatial.distance import euclidean
 from torch.nn.modules.utils import _pair
 from torchvision import models
 from sklearn.metrics import jaccard_score
+from models.exp_cnn_models import *
 import matplotlib.pyplot as plt
 
 # Commented out IPython magic to ensure Python compatibility.
@@ -95,24 +95,26 @@ test_gens  = [cifar_test_gen, fmnist_test_gen]
 dataset_names = ['CIFAR10', 'FashionMNIST']
 
 # MODELS
-encoder1 = ConvolutionalEncoder(reflexor_size).to(device)
+encoder1 = PreReflexorConvEncoder(reflexor_size).to(device)
 decoder1 = ConvolutionalDecoder(reflexor_size).to(device)
+reflexor1 = Reflexor(reflexor_size).to(device)
 classifier1 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
-auto_params1 = list(encoder1.parameters()) + list(decoder1.parameters())
-class_params1 = list(encoder1.parameters()) + list(classifier1.parameters())
+auto_params1 = list(encoder1.parameters()) + list(reflexor1.parameters()) + list(decoder1.parameters())
+class_params1 = list(encoder1.parameters()) + list(reflexor1.parameters()) + list(classifier1.parameters())
 
-# mod2 = ConvEncoderModulator(reflexor_size).to(device)
 # encoder2 = ModulatedConvolutionalEncoder(reflexor_size).to(device)
-encoder2 = PreReflexorModulatedConvEncoder(reflexor_size).to(device)
+encoder2 = PreReflexorConvEncoder(reflexor_size).to(device)
 decoder2 = ConvolutionalDecoder(reflexor_size).to(device)
+reflexor2 = Reflexor(reflexor_size).to(device)
+mod = PreReflexorConvEncoderModulator(reflexor_size).to(device)
 classifier2 = ConvolutionalEncoderClassifier(reflexor_size, 10).to(device)
-auto_params2 = list(encoder2.parameters()) + list(decoder2.parameters())
-class_params2 = list(encoder2.parameters()) + list(classifier2.parameters())
+auto_params2 = list(encoder2.parameters()) + list(reflexor2.parameters()) + list(mod.parameters()) + list(decoder2.parameters())
+class_params2 = list(mod.parameters()) + list(reflexor2.parameters()) + list(classifier2.parameters())
 
 # Baseline model
-net1 = [encoder1, decoder1, classifier1, auto_params1, class_params1]
+net1 = [encoder1, reflexor1, None, decoder1, classifier1, auto_params1, class_params1]
 # Modulated model
-net2 = [encoder2, decoder2, classifier2, auto_params2, class_params2]
+net2 = [encoder2, reflexor2, mod, decoder2, classifier2, auto_params2, class_params2]
 
 lr = 1e-5 # size of step
 loss_function = nn.MSELoss()
@@ -144,7 +146,7 @@ for dset_idx, train_gen in enumerate(train_gens):
     steps.append([])
 
     for num, net in enumerate([net1, net2]):
-      encoder, decoder, classifier, auto_params, class_params = net
+      encoder, reflexor, mod, decoder, classifier, auto_params, class_params = net
 
       autoencoder_optimizer = torch.optim.Adam(auto_params, lr=lr)
       classifier_optimizer = torch.optim.Adam(class_params, lr=lr)
@@ -166,14 +168,17 @@ for dset_idx, train_gen in enumerate(train_gens):
 
           # Generate encoded features
           encoded = encoder(images)
+          if(mod != None):
+              encoded = encoded * mod(images)
+          compressed = reflexor(encoded)
 
           # Backprop autoencoder
-          decoded = decoder(encoded)
+          decoded = decoder(compressed)
           decoder_loss = loss_function(decoded, images)
           decoder_loss.backward(retain_graph=True)
 
           # Backprop classifier
-          outputs = classifier(encoded)
+          outputs = classifier(compressed)
           # outputs = classifier(encoded.detach())
           labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
           output_loss = loss_function(outputs, labels)
@@ -211,7 +216,13 @@ for dset_idx, train_gen in enumerate(train_gens):
             for images, labels in test_gens[0]:
               images = images.to(device)
               labels = labels.to(device)
-              output = classifier(encoder(images))
+
+              encoded = encoder(images)
+              if(mod != None):
+                  encoded = encoded * mod(images)
+              compressed = reflexor(encoded)
+
+              output = classifier(compressed)
               labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
               score += loss_function(output, labels).item()
               total += 1
@@ -222,7 +233,13 @@ for dset_idx, train_gen in enumerate(train_gens):
             total = 0
             for images, labels in test_gens[dset_idx]:
               images = images.to(device)
-              output = decoder(encoder(images))
+
+              encoded = encoder(images)
+              if(mod != None):
+                  encoded = encoded * mod(images)
+              compressed = reflexor(encoded)
+
+              output = decoder(compressed)
               score += loss_function(output, images).item()
               total += 1
             auto_test_losses[dset_idx][num].append((score / total))
@@ -233,7 +250,13 @@ for dset_idx, train_gen in enumerate(train_gens):
             for images, labels in test_gens[dset_idx]:
               images = images.to(device)
               labels = labels.to(device)
-              output = classifier(encoder(images))
+
+              encoded = encoder(images)
+              if(mod != None):
+                  encoded = encoded * mod(images)
+              compressed = reflexor(encoded)
+
+              output = classifier(compressed)
               labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
               score += loss_function(output, labels).item()
               total += 1
@@ -293,7 +316,7 @@ plt.plot(first_task_steps[0], first_task_losses[0], label= "Baseline")
 plt.plot(first_task_steps[1], first_task_losses[1], label= "Modulated")
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('First task classification loss history, Dataset 0')
+plt.title('First task classification loss history, Dataset: CIFAR10')
 plt.legend()
 plt.show()
 

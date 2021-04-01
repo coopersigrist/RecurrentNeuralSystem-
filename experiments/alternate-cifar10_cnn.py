@@ -136,141 +136,143 @@ reconstructed_imgs = [[],[]]
 
 param_counts = np.ones(2)
 
-for dset_idx, train_gen in enumerate(train_gens):
-    print('Dataset:', dataset_names[dset_idx])
-    auto_train_losses.append([])
-    auto_test_losses.append([])
-    class_train_losses.append([])
-    class_test_losses.append([])
-    steps.append([])
+for epoch in range(num_epochs):
+    for dset_idx, train_gen in enumerate(train_gens):
+        print('Dataset:', dataset_names[dset_idx])
+        if(epoch == 0):
+            auto_train_losses.append([])
+            auto_test_losses.append([])
+            class_train_losses.append([])
+            class_test_losses.append([])
+            steps.append([])
 
-    for num, net in enumerate([net1, net2]):
-      encoder, reflexor, mod, decoder, classifier, auto_params, class_params = net
+        for num, net in enumerate([net1, net2]):
+          encoder, reflexor, mod, decoder, classifier, auto_params, class_params = net
 
-      autoencoder_optimizer = torch.optim.Adam(auto_params, lr=lr)
-      classifier_optimizer = torch.optim.Adam(class_params, lr=lr)
-      param_counts[num] = (sum(p.numel() for p in auto_params if p.requires_grad))
+          autoencoder_optimizer = torch.optim.Adam(auto_params, lr=lr)
+          classifier_optimizer = torch.optim.Adam(class_params, lr=lr)
+          param_counts[num] = (sum(p.numel() for p in auto_params if p.requires_grad))
 
-      auto_train_losses[dset_idx].append([])
-      auto_test_losses[dset_idx].append([])
-      class_train_losses[dset_idx].append([])
-      class_test_losses[dset_idx].append([])
-      steps[dset_idx].append([])
+          if(epoch == 0):
+              auto_train_losses[dset_idx].append([])
+              auto_test_losses[dset_idx].append([])
+              class_train_losses[dset_idx].append([])
+              class_test_losses[dset_idx].append([])
+              steps[dset_idx].append([])
 
-      for epoch in range(num_epochs):
-        for i, (images, labels) in enumerate(train_gen):
+          for i, (images, labels) in enumerate(train_gen):
 
-          images = images.to(device)
+            images = images.to(device)
 
-          autoencoder_optimizer.zero_grad()
-          classifier_optimizer.zero_grad()
+            autoencoder_optimizer.zero_grad()
+            classifier_optimizer.zero_grad()
 
-          # Generate encoded features
-          encoded = encoder(images)
-          if(mod != None):
-              encoded = encoded * mod(images)
-          compressed = reflexor(encoded)
+            # Generate encoded features
+            encoded = encoder(images)
+            if(mod != None):
+                encoded = encoded * mod(images)
+            compressed = reflexor(encoded)
 
-          # Backprop autoencoder
-          decoded = decoder(compressed)
-          decoder_loss = loss_function(decoded, images)
-          decoder_loss.backward(retain_graph=True)
+            # Backprop autoencoder
+            decoded = decoder(compressed)
+            decoder_loss = loss_function(decoded, images)
+            decoder_loss.backward(retain_graph=True)
 
-          # Backprop classifier
-          outputs = classifier(compressed)
-          # outputs = classifier(encoded.detach())
-          labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
-          output_loss = loss_function(outputs, labels)
-          output_loss.backward()
+            # Backprop classifier
+            outputs = classifier(compressed)
+            # outputs = classifier(encoded.detach())
+            labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
+            output_loss = loss_function(outputs, labels)
+            output_loss.backward()
 
-          # Update weights
-          classifier_optimizer.step()
-          autoencoder_optimizer.step()
+            # Update weights
+            classifier_optimizer.step()
+            autoencoder_optimizer.step()
 
-          # Train neuromodulator + encoder on previous dataset if on new dataset
-          # if(dset_idx != 0 and (i+1) % 200 == 0):
-          #   for first_images, first_labels in train_gens[0]:
-          #     first_images = first_images.to(device)
-          #     first_decoded = decoder(encoder(first_images))
-          #     first_decoder_loss = loss_function(first_decoded, first_images)
-          #     first_decoder_loss.backward()
-          #     autoencoder_optimizer.step()
+            # Train neuromodulator + encoder on previous dataset if on new dataset
+            # if(dset_idx != 0 and (i+1) % 200 == 0):
+            #   for first_images, first_labels in train_gens[0]:
+            #     first_images = first_images.to(device)
+            #     first_decoded = decoder(encoder(first_images))
+            #     first_decoder_loss = loss_function(first_decoded, first_images)
+            #     first_decoder_loss.backward()
+            #     autoencoder_optimizer.step()
 
-          if (i+1) % 300 == 0:
-            # Output and save current model task loss
-            auto_loss = decoder_loss.item()
-            class_loss = output_loss.item()
+            if (i+1) % 300 == 0:
+              # Output and save current model task loss
+              auto_loss = decoder_loss.item()
+              class_loss = output_loss.item()
 
-            print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,' \
-                       %(epoch+1, num_epochs, i+1, len(train_data[dset_idx])//batch_size, class_loss, auto_loss))
+              print('Epoch [%d/%d], Step [%d/%d], class_loss: %.4f, auto_loss: %.4f,' \
+                         %(epoch+1, num_epochs, i+1, len(train_data[dset_idx])//batch_size, class_loss, auto_loss))
 
-            auto_train_losses[dset_idx][num].append(auto_loss)
-            class_train_losses[dset_idx][num].append(class_loss)
-            steps[dset_idx][num].append((50000 * epoch) + ((i + 1) * batch_size))
+              auto_train_losses[dset_idx][num].append(auto_loss)
+              class_train_losses[dset_idx][num].append(class_loss)
+              steps[dset_idx][num].append((50000 * epoch) + ((i + 1) * batch_size))
 
-            # TEST DATA
-            # First task accuracy (CIFAR)
-            score = 0
-            total = 0
-            for images, labels in test_gens[0]:
-              images = images.to(device)
-              labels = labels.to(device)
+              # TEST DATA
+              # First task accuracy (CIFAR)
+              score = 0
+              total = 0
+              for images, labels in test_gens[0]:
+                images = images.to(device)
+                labels = labels.to(device)
 
-              encoded = encoder(images)
-              if(mod != None):
-                  encoded = encoded * mod(images)
-              compressed = reflexor(encoded)
+                encoded = encoder(images)
+                if(mod != None):
+                    encoded = encoded * mod(images)
+                compressed = reflexor(encoded)
 
-              output = classifier(compressed)
-              labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
-              score += loss_function(output, labels).item()
-              total += 1
-            first_task_losses[num].append((score / total))
+                output = classifier(compressed)
+                labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
+                score += loss_function(output, labels).item()
+                total += 1
+              first_task_losses[num].append((score / total))
 
-            # Calculate train loss for image generation
-            score = 0
-            total = 0
-            for images, labels in test_gens[dset_idx]:
-              images = images.to(device)
+              # Calculate train loss for image generation
+              score = 0
+              total = 0
+              for images, labels in test_gens[dset_idx]:
+                images = images.to(device)
 
-              encoded = encoder(images)
-              if(mod != None):
-                  encoded = encoded * mod(images)
-              compressed = reflexor(encoded)
+                encoded = encoder(images)
+                if(mod != None):
+                    encoded = encoded * mod(images)
+                compressed = reflexor(encoded)
 
-              output = decoder(compressed)
-              score += loss_function(output, images).item()
-              total += 1
-            auto_test_losses[dset_idx][num].append((score / total))
+                output = decoder(compressed)
+                score += loss_function(output, images).item()
+                total += 1
+              auto_test_losses[dset_idx][num].append((score / total))
 
-            # Calculate train loss for image classification
-            score = 0
-            total = 0
-            for images, labels in test_gens[dset_idx]:
-              images = images.to(device)
-              labels = labels.to(device)
+              # Calculate train loss for image classification
+              score = 0
+              total = 0
+              for images, labels in test_gens[dset_idx]:
+                images = images.to(device)
+                labels = labels.to(device)
 
-              encoded = encoder(images)
-              if(mod != None):
-                  encoded = encoded * mod(images)
-              compressed = reflexor(encoded)
+                encoded = encoder(images)
+                if(mod != None):
+                    encoded = encoded * mod(images)
+                compressed = reflexor(encoded)
 
-              output = classifier(compressed)
-              labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
-              score += loss_function(output, labels).item()
-              total += 1
-            class_test_losses[dset_idx][num].append((score / total))
+                output = classifier(compressed)
+                labels = torch.nn.functional.one_hot(labels, num_classes=10).type(torch.FloatTensor).to(device)
+                score += loss_function(output, labels).item()
+                total += 1
+              class_test_losses[dset_idx][num].append((score / total))
 
-            # Optionally show images
-            # dupe = Variable(decoded[0].data, requires_grad=False)
-            # plt.imshow(img_fix(images[0]))
-            # plt.show()
-            # plt.imshow(img_fix(dupe))
-            # plt.show()
+              # Optionally show images
+              # dupe = Variable(decoded[0].data, requires_grad=False)
+              # plt.imshow(img_fix(images[0]))
+              # plt.show()
+              # plt.imshow(img_fix(dupe))
+              # plt.show()
 
-            # Add images to show at the end
-            # real_imgs[num].append(img_fix(images[0].clone()))
-            # reconstructed_imgs[num].append(img_fix(dupe.clone()))
+              # Add images to show at the end
+              # real_imgs[num].append(img_fix(images[0].clone()))
+              # reconstructed_imgs[num].append(img_fix(dupe.clone()))
 
 
 for dset_idx, data in enumerate(train_data):

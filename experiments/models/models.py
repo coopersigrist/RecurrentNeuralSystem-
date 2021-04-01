@@ -189,7 +189,7 @@ class ModulatedConvolutionalAutoEncoder(nn.Module):
     def forward(self, x):
 
         mod = self.mod(x)
-        out = self.encoder(out)
+        out = self.encoder(x)
         out = self.decoder(out)
 
         return out

@@ -39,25 +39,22 @@ import matplotlib.pyplot as plt
 
 class Early_exit_lin_layer(nn.Module):
 
-    def __init__(self, in_size, out_size, classes):
+    def __init__(self, in_size, out_size):
 
         self.in_size = in_size
         self.out_size = out_size
-        self.classes = classes
-        self.classifer = Early_exit_classifier(in_size, classes)
-        self.confidence_layer = Early_exit_confidence_layer(in_size)
         super().__init__()
 
         self.lin_layer = nn.Linear(self.in_size, self.out_size, True)
 
-    def forward(x):
+    def forward(self, x):
 
         out = self.lin_layer(x) 
         out = torch.relu(out)
-        self.classify = self.classifer(out)
-        self.confidence = self.confidence_layer(out)
 
         return out
+
+
 
 
 
@@ -72,7 +69,7 @@ class Early_exit_classifier(nn.Module):
 
         self.lin_layer = nn.Linear(self.in_size, self.classes, True)
 
-    def forward(x):
+    def forward(self, x):
 
         out = self.lin_layer(x)
 
@@ -87,8 +84,9 @@ class Early_exit_confidence_layer(nn.Module):
 
         self.lin_layer = nn.Linear(self.in_size, 1, True)
 
-    def forward(x):
+    def forward(self, x):
 
         out = self.lin_layer(x)
 
         return out
+

@@ -159,6 +159,7 @@ dmypy.json
 
 # datasets
 experiments/data/
+checkpoints/
 
 # vscode
 .vscode/*
@@ -170,3 +171,4 @@ experiments/data/
 
 # Local History for Visual Studio Code
 .history/
+

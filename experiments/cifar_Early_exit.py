@@ -12,14 +12,15 @@ from torch.nn.modules.utils import _pair
 from torchvision import models
 from sklearn.metrics import jaccard_score
 import matplotlib.pyplot as plt
+import os
 from models.Early_exit_models import Early_exit_lin_layer, Early_exit_classifier, Early_exit_confidence_layer
 
 
 
 def main():
 
-    batch_size = 1
-    num_epochs = 5
+    batch_size = 50
+    num_epochs = 10
 
     transform = transforms.Compose(
     [transforms.ToTensor(),
@@ -45,7 +46,7 @@ def main():
     confidences = {}
 
     # Sets the size of the main body layers which determines the size of the whole network
-    layers = [3072,400,200,10]
+    layers = [3072,2000,1000,400,200,10]
 
     classes = layers[-1]
  
@@ -56,14 +57,16 @@ def main():
     confidence_params = []
 
     # Set the learning rate hyperparams -- we can change them all differently if we wanna make more work for otherselves
-    lin_lr = 1e-7
-    class_lr = 1e-7
+    lin_lr = 1e-6
+    class_lr = 1e-6
     confidence_lr = 1e-7
 
-    graph_iter = 10000
+    graph_iter = 200
+    threshold = 0.8
+    graphing = False
 
     # They'll all use the same loss (for now)
-    loss_function = nn.MSELoss()
+    loss_function = nn.BCELoss()
 
     gpu = torch.cuda.is_available()
     if gpu:
@@ -97,10 +100,12 @@ def main():
     lin_and_class_optimizer = torch.optim.Adam( lin_params + class_params, lr=lin_lr)
     confidence_optimizer = torch.optim.Adam( confidence_params, lr=confidence_lr)
 
-    print("Training:")
+    test_losses = []
+
+    print("Training Main and Classifiers:")
 
     for epoch in range(num_epochs):
-        for i, (images, labels) in tqdm(enumerate(train_gen)):
+        for i, (images, labels) in enumerate(tqdm(train_gen)):
 
             images = images.view((batch_size, 3072))
             labels = torch.nn.functional.one_hot(labels, num_classes=classes).type(torch.FloatTensor)
@@ -111,47 +116,58 @@ def main():
                 images = images.to('cuda')
                 labels = labels.to('cuda')
 
-            class_losses_instance = (train_linear_and_classifier(images, linear_layers, classifiers, labels, lin_and_class_optimizer, loss_function))
-            decider_losses_instance = (train_decider(images, linear_layers, classifiers, confidences, labels, confidence_optimizer, loss_function, classes))
-
-            class_losses_instance = np.expand_dims(class_losses_instance, axis=1)
-            decider_losses_instance = np.expand_dims(decider_losses_instance, axis=1)
-
-            if i == 0 and epoch == 0:
-                class_losses = class_losses_instance
-                decider_losses = decider_losses_instance
-
-            elif i % graph_iter == 0:
-
-                class_losses = np.concatenate((class_losses, class_losses_instance), axis=1)
-                decider_losses = np.concatenate((decider_losses, decider_losses_instance), axis=1)
+            train_linear_and_classifier(images, linear_layers, classifiers, labels, lin_and_class_optimizer, loss_function)
+            train_decider(images, linear_layers, classifiers, confidences, labels, confidence_optimizer, loss_function, classes)
 
 
-                for j in range(len(layers) - 1):
-                    plt.plot(np.arange((i//graph_iter) + 2)*graph_iter/2, class_losses[j], label="class loss layer:"+str(j))
-                    plt.plot(np.arange((i//graph_iter) + 2)*graph_iter/2, decider_losses[j], label="decider loss layer:"+str(j))
+        save_all(linear_layers, classifiers, confidences, "t_cd_" + str(epoch+1))
 
-                plt.xlabel('Batches')
-                plt.ylabel('Loss')
-                plt.title('train loss history')
-                plt.legend()
-                plt.show()
 
-    
-    test_losses = np.ones(len(test_gen))
+    # print("Training Deciders:")  ### UNCOMMENT FROM HERE DOWN TO SEPERATE CLASS / DECIDER TRAINING
 
-    print("Testing:")
+    # # change to MSE for decider
+    # loss_function = nn.MSELoss()
 
-    for i, (images, labels) in tqdm(enumerate(test_gen)):
+    # for epoch in range(num_epochs):
+    #     for i, (images, labels) in enumerate(tqdm(train_gen)):
 
-        images = images.flatten()
-        test_losses[i] = test(images, labels, linear_layers, classifiers, confidences, threshold)
+    #         images = images.view((batch_size, 3072))
+    #         labels = torch.nn.functional.one_hot(labels, num_classes=classes).type(torch.FloatTensor)
+    #         labels = labels.view((batch_size, 10))
 
-    plt.plot(np.arange(len(test_gen)), test_losses)
-    plt.xlabel('Batches')
-    plt.ylabel('Loss')
-    plt.title('test loss history')
-    plt.show()
+    #         if gpu:
+
+    #             images = images.to('cuda')
+    #             labels = labels.to('cuda')
+
+    #         # train_linear_and_classifier(images, linear_layers, classifiers, labels, lin_and_class_optimizer, loss_function)
+    #         train_decider(images, linear_layers, classifiers, confidences, labels, confidence_optimizer, loss_function, classes)
+
+
+    #         if (i % graph_iter == 0):
+
+    #             save_all(linear_layers, classifiers, confidences, "d_"+str(epoch + 1))
+    #             # load_and_test_and_graph(layers=layers, path='../checkpoints/'+str(i), threshold=0.5)
+
+    #             # print("Testing:")
+    #             # test(linear_layers, classifiers, confidences, threshold=0.8)
+
+
+def save_all(linear_layers, classifiers, confidences, save_name):
+
+    path = '../checkpoints/'+save_name
+
+    if not os.path.exists(path):
+        os.makedirs(path, mode=0o777)
+        os.chmod(path, mode=0o777)
+
+    for i in range(len(linear_layers)):
+        torch.save({"lin_"+str(i) : linear_layers["lin_"+str(i)].state_dict(),
+        "class_"+str(i) : classifiers["class_"+str(i)].state_dict(),
+        "confidence_"+str(i) : confidences["confidence_"+str(i)].state_dict()}, path+'/layer'+str(i)+'.pt')
+
+    return
+
 
 
 
@@ -177,6 +193,7 @@ def train_linear_and_classifier(inputs, linear_layers, classifiers, labels, opti
         inputs = lin_layer(inputs)
 
 
+
         # use that output to get class accuracy for grad on classifier and linear
         outputs = classifier(inputs)
         class_loss = loss_function(outputs, labels)
@@ -184,7 +201,7 @@ def train_linear_and_classifier(inputs, linear_layers, classifiers, labels, opti
         class_loss.backward(retain_graph=True)
         optimizer.step()
 
-
+    # print(class_losses)
 
     return class_losses # outputs # -- uncomment (and make other changes) if you'd like to train deider at same time. 
 
@@ -193,7 +210,7 @@ def train_decider(inputs, linear_layers, classifiers, confidences, labels, confi
     # outputs = []
     layers = len(linear_layers)
     batch_size = len(inputs)
-    class_scores = np.ones((layers, batch_size, classes))
+    class_losses = np.ones((layers, batch_size))
 
     outputs = [inputs]
 
@@ -226,12 +243,12 @@ def train_decider(inputs, linear_layers, classifiers, confidences, labels, confi
         # lin_optimizer.step()
         # class_optimizer.step()
 
-        class_scores[i] = np.array(class_score.detach())
+        class_losses[i] = loss_function(class_score, labels).item()
 
 
     # softmax over all layers 
-    class_score_sm = np.exp(class_scores)
-    class_score_sm /= np.sum(class_score_sm)
+    class_loss_softmin = nn.functional.softmin(torch.from_numpy(class_losses).detach().type(torch.float32), dim=0)
+
     
     
     for i in range(layers):
@@ -240,11 +257,7 @@ def train_decider(inputs, linear_layers, classifiers, confidences, labels, confi
 
         decision_output = decider(outputs[i+1])
 
-        class_score = torch.from_numpy(class_score_sm[i])
-        class_sm_loss = loss_function(class_score, labels).item() 
-
-
-        decision_label = torch.from_numpy((np.ones((decision_output.shape)) * class_sm_loss)).type(torch.float32)
+        decision_label = class_loss_softmin[i]
 
         decider_loss = loss_function(decision_output, decision_label)
         decider_losses[i] = decider_loss.item()
@@ -253,27 +266,207 @@ def train_decider(inputs, linear_layers, classifiers, confidences, labels, confi
 
     return decider_losses
 
-def test(inputs, labels, linear_layers, classifiers, confidences, threshold=None):
+def test(linear_layers, classifiers, confidences, threshold=None):
 
-    layers = len(linear_layers)
-    for i in range(layers-1):
+    batch_size = 1
+    n_layers = len(linear_layers)
 
-        classifier = classifiers["class_"+str(i)]
-        lin_layer = linear_layers["lin_"+str(i)]
-        decider = confidences["confidence_"+str(i)]
+    transform = transforms.Compose(
+        [transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-        main_outs = lin_layer(inputs)
-
-        if threshold is not None:
-
-            confidence = decider(main_outs)
-
-            if (confidence > threshold):
-
-                classifications = classifier(main_outs)
-                return classifications
+    test_data = dsets.CIFAR10(root = './data', train = False,
+                    transform = transform)
     
-    classifications = classifier(main_outs)
-    return classifications1
+    test_gen = torch.utils.data.DataLoader(dataset = test_data,
+                                    batch_size = batch_size,
+                                    shuffle = False)
+
+# Run test over all the test data #
+
+    exit_counts = np.zeros(n_layers)
+
+    correct = np.zeros(n_layers)
+
+
+    for i, (image, label) in tqdm(enumerate(test_gen)):
+
+        # Called main_outs because this will be the inputs/outputs of the main body (linear layers)
+        main_outs = image.view((batch_size, 3072))
+
+        max_conf = 0 # for threshold = None
+
+
+        for i in range(n_layers):
+
+            classifier = classifiers["class_"+str(i)]
+            lin_layer = linear_layers["lin_"+str(i)]
+            decider = confidences["confidence_"+str(i)]
+
+            main_outs = lin_layer(main_outs)
+
+            if threshold is not None:
+
+                confidence = decider(main_outs).detach()[0]
+
+                if (confidence >= threshold):
+
+                    # Add 1 to count for early exit on EE'd layer
+                    exit_counts[i] += 1
+
+                    scores = list(classifier(main_outs).detach())
+                    scores = list(scores[0].detach())
+                    prediction = scores.index(max(scores))
+
+                    if (prediction == label):
+                        correct[i] += 1
+                    # else:
+                        # print("chose", prediction,"not",label)
+                        # print("had confidence:", confidence)
+
+                    break
+                
+                elif(i == n_layers-1):
+                    # Adds Count for exit on final layer (none had enough confidence)
+                    exit_counts[i] += 1
+
+                    scores = list(classifier(main_outs).detach())
+                    scores = list(scores[0].detach())
+                    prediction = scores.index(max(scores))
+
+                    if (prediction == label):
+                        correct[i] += 1
+ 
+            else:
+
+                conf = decider(main_outs).detach()[0]
+                if  conf > max_conf:
+
+                    max_conf = conf
+                    max_conf_ind = i
+                    scores = list(classifier(main_outs).detach())
+                    scores = list(scores[0].detach())
+                    
+                    max_conf_pred = scores.index(max(scores))
+                
+        if threshold is None:
+
+            # Add 1 to count for early exit on EE'd layer
+            exit_counts[max_conf_ind] += 1
+
+            prediction = max_conf_pred
+
+            if (prediction == label):
+                correct[max_conf_ind] += 1
+            # else:
+                # print("chose", prediction,"not",label)
+                # print("had confidence:", max_conf)
+
+            
+
+    total_accuracy = np.sum(correct)/len(test_gen)
+
+    print("accuracy=", total_accuracy)
+
+    accuracy = correct/exit_counts
+
+    for i in range(n_layers):
+
+
+        print("number of exits at layer",i,":",exit_counts[i])
+        print("accuracy of exits at layer",i,":",accuracy[i])
+
+    return exit_counts, accuracy, total_accuracy
+
+def load_and_test_and_graph(layers, checkpoints, threshold=0.8):
+
+    # Layers here is number of layers
+
+    paths = []
+
+    for cp in checkpoints:
+        paths.append('../checkpoints/'+str(cp))
+
+    linear_layers = {}
+    classifiers = {}
+    confidences = {}
+
+    lin_params = []
+    class_params = []
+    confidence_params = []
+
+    n_layers = len(layers) - 1
+    classes = layers[-1]
+
+    for i in range(n_layers):
+
+        #load all of the layers -- the main body, the classifiers, and the decision/confidence layer
+
+        linear_layers["lin_"+str(i)] = Early_exit_lin_layer(layers[i], layers[i+1])
+        classifiers["class_"+str(i)] = Early_exit_classifier(layers[i+1], classes)
+        confidences["confidence_"+str(i)] = Early_exit_confidence_layer(layers[i+1])
+
+    n_paths = len(paths)
+
+    exit_counts = np.zeros((n_paths, n_layers))
+    layer_accuracies = np.zeros((n_paths, n_layers))
+    total_accuracies = np.zeros((n_paths))
+
+
+    for n, path in enumerate(paths):
+
+        for i in range(n_layers):
+
+            layer = torch.load(path + '/layer'+str(i)+'.pt')
+
+            linear_layers["lin_"+str(i)].load_state_dict(layer["lin_"+str(i)])
+            classifiers["class_"+str(i)].load_state_dict(layer["class_"+str(i)])
+            confidences["confidence_"+str(i)].load_state_dict(layer["confidence_"+str(i)]) 
+
+            # Make lists of params (you'll get the naming convention)
+            lin_params += (list(linear_layers["lin_"+str(i)].parameters()))
+            class_params += (list(classifiers["class_"+str(i)].parameters()))
+            confidence_params += (list(confidences["confidence_"+str(i)].parameters()))
+        
+        exit_counts[n], layer_accuracies[n], total_accuracies[n] = test(linear_layers, classifiers, confidences, threshold=0.8)
+
+    width = 1/ n_paths
+
+    for n in range(n_paths):
+        plt.bar(np.arange(n_layers) + n*width, exit_counts[n], width=width, label=checkpoints[n])
+
+    plt.legend()
+    plt.title("early exit counts by layer -- threshold =" +str(threshold))
+    plt.xlabel('layer number')
+    plt.ylabel('number of early exits')
+    plt.show()
+
+    for n in range(n_paths):
+        plt.bar(np.arange(n_layers) + n*width, layer_accuracies[n], width=width, label=checkpoints[n])
+
+    plt.legend()
+    plt.title("Accuracy of layers output when chosen for EE -- threshold =" +str(threshold))
+    plt.xlabel('layer number')
+    plt.ylabel('avg accuracy of layer when chosen')
+    plt.show()
+
+    for n in range(n_paths):
+        plt.bar(np.arange(1) + n*width, total_accuracies[n], width=width, label=checkpoints[n])
+
+    plt.legend()
+    plt.title("total test accuracy with early exit -- threshold =" +str(threshold))
+    plt.xlabel('layer number')
+    plt.ylabel('test accuracy')
+    plt.show()
+
+    quit()
 
 main()
+
+layers = [3072,2000,1000,400,200,10]
+
+checkpoints = ['t_cd_1','t_cd_2','t_cd_3','t_cd_4','t_cd_5','t_cd_6','t_cd_7','t_cd_8','t_cd_9','t_cd_10']
+
+
+load_and_test_and_graph(layers=layers, checkpoints=checkpoints, threshold=0.01)
+# main()

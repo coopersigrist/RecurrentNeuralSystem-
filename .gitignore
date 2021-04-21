@@ -159,3 +159,4 @@ dmypy.json
 
 # datasets
 experiments/data/
+checkpoints/

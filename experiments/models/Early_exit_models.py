@@ -46,16 +46,15 @@ class Early_exit_lin_layer(nn.Module):
         super().__init__()
 
         self.lin_layer = nn.Linear(self.in_size, self.out_size, True)
+        self.bn = nn.LayerNorm(self.out_size)
 
     def forward(self, x):
 
         out = self.lin_layer(x) 
         out = torch.relu(out)
+        out = self.bn(out)
 
         return out
-
-
-
 
 
 
@@ -68,10 +67,13 @@ class Early_exit_classifier(nn.Module):
         super().__init__()
 
         self.lin_layer = nn.Linear(self.in_size, self.classes, True)
+        self.sm = torch.nn.Softmax(dim=1)
 
     def forward(self, x):
 
         out = self.lin_layer(x)
+        out = self.sm(out)
+        
 
         return out
 
@@ -87,6 +89,7 @@ class Early_exit_confidence_layer(nn.Module):
     def forward(self, x):
 
         out = self.lin_layer(x)
+        out = torch.sigmoid(out)
 
         return out
 

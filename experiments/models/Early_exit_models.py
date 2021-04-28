@@ -36,6 +36,42 @@ import matplotlib.pyplot as plt
                 
 #             return out
 
+class Early_exit_conv_layer(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, pool_kernel, pool_stride, pool_padding):
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.pool_kernel = pool_kernel
+        self.pool_stride = pool_stride
+        self.pool_padding = pool_padding
+
+        super().__init__()
+
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.mp = nn.MaxPool2d(kernel_size=pool_kernel, stride=pool_stride)
+
+    def output_size(self,B,C,H,W):
+
+        conv_H = ((H + 2*self.padding[0] - self.kernel_size[0])/self.stride[0]) + 1
+        conv_W = ((W + 2*self.padding[1] - self.kernel_size[1])/self.stride[1]) + 1
+        conv_C = self.out_channels
+
+        mp_H = ((conv_H + 2*self.pool_padding[0] - self.pool_kernel[0])/self.pool_stride[0]) + 1
+        mp_W = ((conv_W + 2*self.pool_padding[1] - self.pool_kernel[1])/self.pool_stride[1]) + 1
+
+        return B, conv_C, mp_H, mp_W
+
+    def forward(self, x):
+
+        out = self.conv(x)
+        out = self.mp(out)
+
+        return out
+    
 
 class Early_exit_lin_layer(nn.Module):
 

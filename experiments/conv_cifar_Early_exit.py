@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import os
 from models.Early_exit_models import Early_exit_conv_layer, Early_exit_classifier, Early_exit_confidence_layer
 
-from cifar_Early_exit_tests import run_test, load_and_test_and_graph 
+from conv_cifar_Early_exit_tests import conv_run_test, conv_load_and_test_and_graph 
 
 
 
@@ -90,8 +90,6 @@ def train_and_save(batch_size=50,num_epochs=10,balance=False,channels=None, kern
 
         B,C,H,W = conv_layers["conv_"+str(i)].output_size(B,C,H,W)
         flattened = C*H*W
-
-        print(flattened)
 
         classifiers["class_"+str(i)] = Early_exit_classifier(int(flattened), classes)
         confidences["confidence_"+str(i)] = Early_exit_confidence_layer(int(flattened))
@@ -236,7 +234,7 @@ def train_decider(inputs, conv_layers, classifiers, confidences, labels, confide
     # outputs = []
     layers = len(conv_layers)
     batch_size = len(inputs)
-    class_losses = np.ones((layers))
+    class_losses = np.ones((layers, batch_size))
 
     outputs = [inputs]
 
@@ -261,11 +259,10 @@ def train_decider(inputs, conv_layers, classifiers, confidences, labels, confide
         # get output of the classifier -- needed for decider training
         class_score = classifier(outputs[-1])
 
-        loss = loss_function(class_score, labels).detach()
+        loss = loss_function(class_score, labels)
 
         # convert scores to losses to train the decider
         class_losses[i] = loss.item()
-
 
     # softmax over all layers 
     class_loss_softmin = nn.functional.softmin(torch.from_numpy(class_losses).detach().type(torch.float32), dim=0)
@@ -274,7 +271,7 @@ def train_decider(inputs, conv_layers, classifiers, confidences, labels, confide
     max_conf_index = torch.argmax(class_loss_softmin)
 
     # More accepted gets +1 for the layer that had highest confidence
-    more_accepted[(max_conf_index+1)/batch_size] += 1
+    more_accepted[((max_conf_index+1)/batch_size) - 1] += 1
     
 
     # Loop over all layers to train respective deciders
@@ -302,24 +299,35 @@ def train_decider(inputs, conv_layers, classifiers, confidences, labels, confide
     return more_accepted
 
 
-channels = [3,4,5]
-kernels = [(3,3),(3,3)]
-strides = [(1,1), (1,1)]
-pool_kernels = [(3,3),(3,3)]
-pool_strides = [(1,1), (1,1)]
+# SMALL CONV HYPERPARAMS
+# channels = [3,4,5]
+# kernels = [(3,3),(3,3)]
+# strides = [(1,1), (1,1)]
+# pool_kernels = [(3,3),(3,3)]
+# pool_strides = [(1,1), (1,1)]
+
+convs = ['conv_1','conv_2','conv_3','conv_4','conv_5','conv_6','conv_7','conv_8','conv_9','conv_10']
+b_convs = ['b_conv_1','b_conv_2','b_conv_3','b_conv_4','b_conv_5','b_conv_6','b_conv_7','b_conv_8','b_conv_9','b_conv_10']
+
+# BIG CONV HYPERPARAMS
+channels = [3,10,20,20,30]
+kernels = [(5,5),(5,5),(3,3),(3,3)]
+strides = [(1,1), (1,1), (1,1), (1,1)]
+pool_kernels = [(3,3),(3,3), (3,3), (3,3)]
+pool_strides = [(1,1), (1,1), (1,1), (1,1)]
 
 
-train_and_save(batch_size=50,num_epochs=10,balance=False,channels=channels, kernels=kernels, strides=strides, pool_kernels=pool_kernels, pool_strides=pool_strides, classes=10,class_lr=1e-6,conf_lr=1e-7,save_name='conv_')
+train_and_save(batch_size=50,num_epochs=10,balance=False,channels=channels, kernels=kernels, strides=strides, pool_kernels=pool_kernels, pool_strides=pool_strides, classes=10,class_lr=1e-6,conf_lr=1e-7,save_name='big_conv_')
 
 
 
 for threshold in [0.3, 0.5, 0.6, 0.7, None]:
 
-    for name, checkpoints in zip(['simultaneous','detached','removed','alternating(1 per 100)','comparison'],[cds,det,rem,alt,comparison]):
+    for name, checkpoints in zip(['big_convolution'],[b_convs]):
 
-        load_and_test_and_graph(layers=layers, checkpoints=checkpoints, name=name, threshold=threshold, classes=10)
+        conv_load_and_test_and_graph(channels=channels, kernels=kernels, strides=strides, pool_kernels=pool_kernels, pool_strides=pool_strides, checkpoints=checkpoints, name=name, threshold=threshold, classes=10)
     
-    load_and_test_and_graph(layers=large_layers, checkpoints=large, name='large', threshold=threshold, classes=10)
+    # conv_load_and_test_and_graph(channels=channels, kernels=kernels, strides=strides, pool_kernels=pool_kernels, pool_strides=pool_strides, checkpoints, name=name, threshold=0.8, classes=10)
 
 
 exit()

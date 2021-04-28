@@ -160,6 +160,8 @@ dmypy.json
 # datasets
 experiments/data/
 checkpoints/
+early_exit_results/
+results/
 
 # vscode
 .vscode/*
